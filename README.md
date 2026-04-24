@@ -104,4 +104,3 @@ npm start
 - All secrets should be rotated regularly
 - Admin password must be set via environment variable
 - Sessions expire after 10 minutes
-Enable AAF to be used as an external authenticator in Entra
