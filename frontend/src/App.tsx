@@ -1,0 +1,38 @@
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import Layout from './components/Layout';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import EntraConfig from './pages/EntraConfig';
+import AAFConfig from './pages/AAFConfig';
+import Sessions from './pages/Sessions';
+import AttributeMapping from './pages/AttributeMapping';
+import AuditLogs from './pages/AuditLogs';
+
+function isAuthenticated(): boolean {
+  return localStorage.getItem('isAuthenticated') === 'true';
+}
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  return <Layout>{children}</Layout>;
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/config/entra" element={<ProtectedRoute><EntraConfig /></ProtectedRoute>} />
+        <Route path="/config/aaf" element={<ProtectedRoute><AAFConfig /></ProtectedRoute>} />
+        <Route path="/sessions" element={<ProtectedRoute><Sessions /></ProtectedRoute>} />
+        <Route path="/attribute-mapping" element={<ProtectedRoute><AttributeMapping /></ProtectedRoute>} />
+        <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}

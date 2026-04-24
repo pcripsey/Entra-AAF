@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const oidcProvider_1 = require("../controllers/oidcProvider");
+const router = (0, express_1.Router)();
+router.get('/.well-known/openid-configuration', oidcProvider_1.discovery);
+router.get('/.well-known/jwks.json', oidcProvider_1.jwks);
+router.get('/authorize', oidcProvider_1.authorize);
+router.get('/callback', oidcProvider_1.callback);
+router.post('/token', oidcProvider_1.token);
+router.get('/userinfo', oidcProvider_1.userinfo);
+exports.default = router;

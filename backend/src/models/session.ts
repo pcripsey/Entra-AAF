@@ -1,0 +1,75 @@
+import { v4 as uuidv4 } from 'uuid';
+import { getDb } from './database';
+
+export interface BridgeSession {
+  id: string;
+  state: string;
+  nonce: string | null;
+  entra_tokens: string | null;
+  aaf_auth_code: string | null;
+  user_claims: string | null;
+  aaf_redirect_uri: string | null;
+  aaf_client_id: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
+export function createSession(
+  state: string,
+  nonce: string | null,
+  expiresAt: Date,
+  aafRedirectUri?: string,
+  aafClientId?: string
+): BridgeSession {
+  const db = getDb();
+  const session: BridgeSession = {
+    id: uuidv4(),
+    state,
+    nonce,
+    entra_tokens: null,
+    aaf_auth_code: null,
+    user_claims: null,
+    aaf_redirect_uri: aafRedirectUri || null,
+    aaf_client_id: aafClientId || null,
+    created_at: new Date().toISOString(),
+    expires_at: expiresAt.toISOString(),
+  };
+  db.prepare(`
+    INSERT INTO sessions (id, state, nonce, entra_tokens, aaf_auth_code, user_claims, aaf_redirect_uri, aaf_client_id, created_at, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(session.id, session.state, session.nonce, null, null, null, session.aaf_redirect_uri, session.aaf_client_id, session.created_at, session.expires_at);
+  return session;
+}
+
+export function getSession(state: string): BridgeSession | null {
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM sessions WHERE state = ?').get(state) as BridgeSession | undefined;
+  return row || null;
+}
+
+export function updateSessionTokens(state: string, entraTokens: object, userClaims: object): void {
+  const db = getDb();
+  db.prepare('UPDATE sessions SET entra_tokens = ?, user_claims = ? WHERE state = ?')
+    .run(JSON.stringify(entraTokens), JSON.stringify(userClaims), state);
+}
+
+export function setAafAuthCode(state: string, code: string): void {
+  const db = getDb();
+  db.prepare('UPDATE sessions SET aaf_auth_code = ? WHERE state = ?').run(code, state);
+}
+
+export function deleteSession(state: string): void {
+  const db = getDb();
+  db.prepare('DELETE FROM sessions WHERE state = ?').run(state);
+}
+
+export function cleanupExpiredSessions(): number {
+  const db = getDb();
+  const result = db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(new Date().toISOString());
+  return result.changes;
+}
+
+export function getAllActiveSessions(): BridgeSession[] {
+  const db = getDb();
+  return db.prepare('SELECT * FROM sessions WHERE expires_at > ?').all(new Date().toISOString()) as BridgeSession[];
+}
