@@ -18,7 +18,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
-        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -26,24 +25,43 @@ jobs:
 
       - name: Get current date
         id: date
+        if: github.event_name == 'push'
         run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
+      - name: Set image tags
+        id: tags
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            PR_NUM="${{ github.event.pull_request.number }}"
+            echo "backend_tags=pcripsey/entra-aaf:backend-pr-${PR_NUM}" >> $GITHUB_OUTPUT
+            echo "frontend_tags=pcripsey/entra-aaf:frontend-pr-${PR_NUM}" >> $GITHUB_OUTPUT
+          else
+            {
+              echo "backend_tags<<EOF"
+              echo "pcripsey/entra-aaf:backend-latest"
+              echo "pcripsey/entra-aaf:backend-${{ steps.date.outputs.date }}"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
+            {
+              echo "frontend_tags<<EOF"
+              echo "pcripsey/entra-aaf:frontend-latest"
+              echo "pcripsey/entra-aaf:frontend-${{ steps.date.outputs.date }}"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
+          fi
 
       - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           file: ./backend/Dockerfile
-          push: ${{ github.event_name == 'push' }}
-          tags: |
-            pcripsey/entra-aaf:backend-latest
-            pcripsey/entra-aaf:backend-${{ steps.date.outputs.date }}
+          push: true
+          tags: ${{ steps.tags.outputs.backend_tags }}
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
-          push: ${{ github.event_name == 'push' }}
-          tags: |
-            pcripsey/entra-aaf:frontend-latest
-            pcripsey/entra-aaf:frontend-${{ steps.date.outputs.date }}
+          push: true
+          tags: ${{ steps.tags.outputs.frontend_tags }}
