@@ -25,13 +25,14 @@ jobs:
 
       - name: Get current date
         id: date
+        if: github.event_name == 'push'
         run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
 
       - name: Set image tags
         id: tags
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            PR_NUM=${{ github.event.pull_request.number }}
+            PR_NUM="${{ github.event.pull_request.number }}"
             echo "backend_tags=pcripsey/entra-aaf:backend-pr-${PR_NUM}" >> $GITHUB_OUTPUT
             echo "frontend_tags=pcripsey/entra-aaf:frontend-pr-${PR_NUM}" >> $GITHUB_OUTPUT
           else
