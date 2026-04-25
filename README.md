@@ -1,7 +1,7 @@
 # Entra-AAF Bridge
 
 An OIDC bridge application that connects Microsoft Entra ID (Azure AD) as an upstream identity provider with OpenText Advanced Authentication Framework (AAF) as a downstream OIDC consumer.
-
+pre
 ## Architecture
 
 The bridge acts as:
