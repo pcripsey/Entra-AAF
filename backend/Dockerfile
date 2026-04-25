@@ -1,15 +1,15 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY ./backend/package*.json ./
+COPY package*.json ./
 RUN npm ci
-COPY ./backend/tsconfig.json ./
-COPY ./backend/src ./src
+COPY tsconfig.json ./
+COPY src ./src
 RUN npm run build
 
 FROM node:20-alpine AS production
 WORKDIR /app
 RUN apk add --no-cache openssl
-COPY ./backend/package*.json ./
+COPY package*.json ./
 RUN npm ci --only=production
 COPY --from=builder /app/dist ./dist
 RUN mkdir -p /app/data /app/keys
