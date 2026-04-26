@@ -4,10 +4,11 @@ export function createBridgeSession(
   state: string,
   nonce: string | null,
   aafRedirectUri: string,
-  aafClientId: string
+  aafClientId: string,
+  idTokenHint?: string | null
 ): BridgeSession {
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-  return createSession(state, nonce, expiresAt, aafRedirectUri, aafClientId);
+  return createSession(state, nonce, expiresAt, aafRedirectUri, aafClientId, idTokenHint);
 }
 
 export function getBridgeSession(state: string): BridgeSession | null {

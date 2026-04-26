@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { getJwks } from '../utils/jwks';
 import { createBridgeSession, getBridgeSession } from '../services/sessionService';
-import { generateAuthorizationUrl, exchangeCode, getUserInfo } from '../services/oidcClientService';
+import { generateAuthorizationUrl, exchangeCode, getUserInfo, decodeIdTokenHint } from '../services/oidcClientService';
 import { updateSessionTokens } from '../models/session';
 import { getAafConfig, getAttributeMappings } from '../models/config';
 import { generateAuthCode, validateAuthCode, generateIdToken, generateAccessToken, validateAccessToken } from '../services/tokenService';
@@ -25,7 +25,7 @@ export function discovery(req: Request, res: Response): void {
     id_token_signing_alg_values_supported: ['RS256'],
     scopes_supported: ['openid', 'profile', 'email'],
     token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic'],
-    claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'name', 'email', 'upn'],
+    claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'name', 'email', 'upn', 'amr', 'acr', 'auth_time'],
   });
 }
 
@@ -35,7 +35,7 @@ export function jwks(req: Request, res: Response): void {
 
 export async function authorize(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { client_id, redirect_uri, response_type, state, nonce } = req.query as Record<string, string>;
+    const { client_id, redirect_uri, response_type, state, nonce, id_token_hint } = req.query as Record<string, string>;
 
     const aafConfig = getAafConfig();
     const aafClientId = aafConfig.clientId || config.aaf.clientId;
@@ -56,16 +56,27 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
       return;
     }
 
+    // Validate id_token_hint structure if provided
+    let validatedHint: string | null = null;
+    if (id_token_hint) {
+      const hintPayload = decodeIdTokenHint(id_token_hint);
+      if (hintPayload) {
+        validatedHint = id_token_hint;
+      } else {
+        logger.warn('Received malformed id_token_hint; ignoring');
+      }
+    }
+
     const bridgeState = uuidv4();
     const bridgeNonce = nonce || uuidv4();
 
-    createBridgeSession(bridgeState, bridgeNonce, redirect_uri, client_id);
+    createBridgeSession(bridgeState, bridgeNonce, redirect_uri, client_id, validatedHint);
 
     const sess = (req.session as unknown) as SessionWithState;
     sess.aafState = state;
     sess.bridgeState = bridgeState;
 
-    const authUrl = await generateAuthorizationUrl(bridgeState, bridgeNonce);
+    const authUrl = await generateAuthorizationUrl(bridgeState, bridgeNonce, validatedHint);
 
     createAuditLog('authorize_request', client_id, `redirect_uri: ${redirect_uri}`, req.ip || null);
 
@@ -99,6 +110,12 @@ export async function callback(req: Request, res: Response, next: NextFunction):
     const tokenSet = await exchangeCode(code, state);
     const userClaims = await getUserInfo(tokenSet);
 
+    // Extract AMR and ACR from Entra ID token claims
+    const amrClaims = Array.isArray(userClaims['amr'])
+      ? (userClaims['amr'] as unknown[]).filter((item): item is string => typeof item === 'string')
+      : null;
+    const acrClaims = typeof userClaims['acr'] === 'string' ? (userClaims['acr'] as string) : null;
+
     const mappings = getAttributeMappings();
     const mappedClaims: Record<string, unknown> = { ...userClaims };
     for (const mapping of mappings) {
@@ -107,7 +124,7 @@ export async function callback(req: Request, res: Response, next: NextFunction):
       }
     }
 
-    updateSessionTokens(state, { access_token: tokenSet.access_token, id_token: tokenSet.id_token }, mappedClaims);
+    updateSessionTokens(state, { access_token: tokenSet.access_token, id_token: tokenSet.id_token }, mappedClaims, amrClaims, acrClaims);
 
     const authCode = generateAuthCode(state);
 
@@ -164,6 +181,18 @@ export async function token(req: Request, res: Response, next: NextFunction): Pr
 
     const userClaims = JSON.parse(bridgeSession.user_claims) as Record<string, unknown>;
     const sub = (userClaims['sub'] as string) || (userClaims['oid'] as string) || 'unknown';
+
+    // Merge stored AMR/ACR claims into the token payload
+    if (bridgeSession.amr_claims) {
+      try {
+        userClaims['amr'] = JSON.parse(bridgeSession.amr_claims) as string[];
+      } catch {
+        // ignore malformed stored value
+      }
+    }
+    if (bridgeSession.acr_claims) {
+      userClaims['acr'] = bridgeSession.acr_claims;
+    }
 
     const idToken = await generateIdToken(userClaims, client_id, bridgeSession.nonce);
     const accessToken = await generateAccessToken(sub, client_id);

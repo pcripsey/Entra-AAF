@@ -27,6 +27,9 @@ export function initializeDatabase(): void {
       user_claims TEXT,
       aaf_redirect_uri TEXT,
       aaf_client_id TEXT,
+      amr_claims TEXT,
+      acr_claims TEXT,
+      id_token_hint TEXT,
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL
     );
@@ -46,6 +49,18 @@ export function initializeDatabase(): void {
       updated_at TEXT NOT NULL
     );
   `);
+
+  // Migrate existing databases by adding new columns if they don't exist
+  const sessionColumns = (db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map(c => c.name);
+  if (!sessionColumns.includes('amr_claims')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN amr_claims TEXT');
+  }
+  if (!sessionColumns.includes('acr_claims')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN acr_claims TEXT');
+  }
+  if (!sessionColumns.includes('id_token_hint')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN id_token_hint TEXT');
+  }
 
   logger.info('Database initialized.');
 }

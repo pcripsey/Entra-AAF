@@ -18,6 +18,9 @@ export interface Session {
   created_at: string;
   expires_at: string;
   status: string;
+  amr_claims: string | null;
+  acr_claims: string | null;
+  id_token_hint: string | null;
 }
 
 export interface AuditLog {

@@ -37,15 +37,19 @@ export async function getEntraClient(): Promise<Client> {
   return cachedClient;
 }
 
-export async function generateAuthorizationUrl(state: string, nonce: string): Promise<string> {
+export async function generateAuthorizationUrl(state: string, nonce: string, idTokenHint?: string | null): Promise<string> {
   const client = await getEntraClient();
   const entraConfig = getEntraConfig();
-  return client.authorizationUrl({
+  const params: Record<string, string> = {
     scope: 'openid profile email',
     state,
     nonce,
     redirect_uri: entraConfig.redirectUri || config.entra.redirectUri,
-  });
+  };
+  if (idTokenHint) {
+    params['id_token_hint'] = idTokenHint;
+  }
+  return client.authorizationUrl(params);
 }
 
 export async function exchangeCode(code: string, state: string): Promise<TokenSet> {
@@ -62,6 +66,19 @@ export async function exchangeCode(code: string, state: string): Promise<TokenSe
 export async function getUserInfo(tokenSet: TokenSet): Promise<Record<string, unknown>> {
   const claims = tokenSet.claims();
   return claims as Record<string, unknown>;
+}
+
+export function decodeIdTokenHint(hint: string): Record<string, unknown> | null {
+  try {
+    const parts = hint.split('.');
+    if (parts.length !== 3) {
+      return null;
+    }
+    const payloadJson = Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
+    return JSON.parse(payloadJson) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 }
 
 export function invalidateClientCache(): void {
