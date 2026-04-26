@@ -1,6 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { getAttributeMappings, updateAttributeMappings } from '../services/api';
 import { AttributeMapping } from '../types';
+import EditableSelect from '../components/EditableSelect';
+
+// Common Microsoft Entra ID / OIDC source claims
+const DEFAULT_SOURCE_OPTIONS = [
+  'sub', 'oid', 'name', 'given_name', 'family_name', 'email',
+  'preferred_username', 'upn', 'unique_name', 'groups', 'roles',
+  'tid', 'iss', 'aud', 'exp', 'iat', 'nbf',
+];
+
+// Common AAF / OIDC target claims
+const DEFAULT_TARGET_OPTIONS = [
+  'sub', 'name', 'given_name', 'family_name', 'email',
+  'preferred_username', 'phone_number', 'address', 'locale',
+  'zoneinfo', 'updated_at', 'profile', 'picture', 'website',
+  'groups', 'roles',
+];
 
 const styles: Record<string, React.CSSProperties> = {
   h1: { fontSize: '24px', fontWeight: 'bold', color: '#1a1a2e', marginBottom: '24px' },
@@ -8,7 +24,6 @@ const styles: Record<string, React.CSSProperties> = {
   table: { width: '100%', borderCollapse: 'collapse', marginBottom: '20px' },
   th: { textAlign: 'left', padding: '10px', borderBottom: '2px solid #eee', fontSize: '12px', color: '#666', textTransform: 'uppercase' },
   td: { padding: '8px', borderBottom: '1px solid #eee' },
-  input: { width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' },
   addBtn: { padding: '8px 16px', background: '#27ae60', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '10px' },
   saveBtn: { padding: '8px 16px', background: '#0f3460', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' },
   removeBtn: { padding: '4px 10px', background: '#c0392b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' },
@@ -18,6 +33,8 @@ const styles: Record<string, React.CSSProperties> = {
 export default function AttributeMappingPage() {
   const [mappings, setMappings] = useState<AttributeMapping[]>([]);
   const [msg, setMsg] = useState('');
+  const [sourceOptions, setSourceOptions] = useState<string[]>(DEFAULT_SOURCE_OPTIONS);
+  const [targetOptions, setTargetOptions] = useState<string[]>(DEFAULT_TARGET_OPTIONS);
 
   useEffect(() => {
     getAttributeMappings().then((res) => setMappings(res.data as AttributeMapping[])).catch(console.error);
@@ -32,6 +49,14 @@ export default function AttributeMappingPage() {
   };
 
   const removeRow = (i: number) => setMappings(mappings.filter((_, idx) => idx !== i));
+
+  const addSourceOption = (opt: string) => {
+    if (!sourceOptions.includes(opt)) setSourceOptions([...sourceOptions, opt]);
+  };
+
+  const addTargetOption = (opt: string) => {
+    if (!targetOptions.includes(opt)) setTargetOptions([...targetOptions, opt]);
+  };
 
   const handleSave = async () => {
     try {
@@ -58,8 +83,24 @@ export default function AttributeMappingPage() {
           <tbody>
             {mappings.map((m, i) => (
               <tr key={i}>
-                <td style={styles.td}><input style={styles.input} value={m.source} onChange={(e) => updateRow(i, 'source', e.target.value)} /></td>
-                <td style={styles.td}><input style={styles.input} value={m.target} onChange={(e) => updateRow(i, 'target', e.target.value)} /></td>
+                <td style={styles.td}>
+                  <EditableSelect
+                    value={m.source}
+                    options={sourceOptions}
+                    onChange={(val) => updateRow(i, 'source', val)}
+                    onAddOption={addSourceOption}
+                    placeholder="-- Select Entra Claim --"
+                  />
+                </td>
+                <td style={styles.td}>
+                  <EditableSelect
+                    value={m.target}
+                    options={targetOptions}
+                    onChange={(val) => updateRow(i, 'target', val)}
+                    onAddOption={addTargetOption}
+                    placeholder="-- Select AAF Claim --"
+                  />
+                </td>
                 <td style={styles.td}><button style={styles.removeBtn} onClick={() => removeRow(i)}>Remove</button></td>
               </tr>
             ))}
