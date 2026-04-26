@@ -10,6 +10,9 @@ export interface BridgeSession {
   user_claims: string | null;
   aaf_redirect_uri: string | null;
   aaf_client_id: string | null;
+  amr_claims: string | null;
+  acr_claims: string | null;
+  id_token_hint: string | null;
   created_at: string;
   expires_at: string;
 }
@@ -19,7 +22,8 @@ export function createSession(
   nonce: string | null,
   expiresAt: Date,
   aafRedirectUri?: string,
-  aafClientId?: string
+  aafClientId?: string,
+  idTokenHint?: string | null
 ): BridgeSession {
   const db = getDb();
   const session: BridgeSession = {
@@ -31,13 +35,16 @@ export function createSession(
     user_claims: null,
     aaf_redirect_uri: aafRedirectUri || null,
     aaf_client_id: aafClientId || null,
+    amr_claims: null,
+    acr_claims: null,
+    id_token_hint: idTokenHint || null,
     created_at: new Date().toISOString(),
     expires_at: expiresAt.toISOString(),
   };
   db.prepare(`
-    INSERT INTO sessions (id, state, nonce, entra_tokens, aaf_auth_code, user_claims, aaf_redirect_uri, aaf_client_id, created_at, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(session.id, session.state, session.nonce, null, null, null, session.aaf_redirect_uri, session.aaf_client_id, session.created_at, session.expires_at);
+    INSERT INTO sessions (id, state, nonce, entra_tokens, aaf_auth_code, user_claims, aaf_redirect_uri, aaf_client_id, amr_claims, acr_claims, id_token_hint, created_at, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(session.id, session.state, session.nonce, null, null, null, session.aaf_redirect_uri, session.aaf_client_id, null, null, session.id_token_hint, session.created_at, session.expires_at);
   return session;
 }
 
@@ -47,10 +54,22 @@ export function getSession(state: string): BridgeSession | null {
   return row || null;
 }
 
-export function updateSessionTokens(state: string, entraTokens: object, userClaims: object): void {
+export function updateSessionTokens(
+  state: string,
+  entraTokens: object,
+  userClaims: object,
+  amrClaims?: string[] | null,
+  acrClaims?: string | null
+): void {
   const db = getDb();
-  db.prepare('UPDATE sessions SET entra_tokens = ?, user_claims = ? WHERE state = ?')
-    .run(JSON.stringify(entraTokens), JSON.stringify(userClaims), state);
+  db.prepare('UPDATE sessions SET entra_tokens = ?, user_claims = ?, amr_claims = ?, acr_claims = ? WHERE state = ?')
+    .run(
+      JSON.stringify(entraTokens),
+      JSON.stringify(userClaims),
+      amrClaims != null ? JSON.stringify(amrClaims) : null,
+      acrClaims ?? null,
+      state
+    );
 }
 
 export function setAafAuthCode(state: string, code: string): void {
