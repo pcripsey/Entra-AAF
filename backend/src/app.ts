@@ -16,6 +16,7 @@ import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
 
+app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
 app.use(morgan('combined'));
@@ -28,7 +29,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: config.nodeEnv === 'production',
+      secure: config.cookieSecure,
       httpOnly: true,
       maxAge: 10 * 60 * 1000,
     },

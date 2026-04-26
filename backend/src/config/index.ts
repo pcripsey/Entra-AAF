@@ -8,6 +8,7 @@ export const config = {
   baseUrl: process.env.BASE_URL || 'http://localhost:3001',
   adminUsername: process.env.ADMIN_USERNAME || 'admin',
   adminPassword: process.env.ADMIN_PASSWORD || 'admin',
+  cookieSecure: process.env.COOKIE_SECURE === 'true',
   dbPath: process.env.DB_PATH || './data/bridge.db',
   jwtPrivateKeyPath: process.env.JWT_PRIVATE_KEY_PATH || './keys/private.pem',
   jwtPublicKeyPath: process.env.JWT_PUBLIC_KEY_PATH || './keys/public.pem',
