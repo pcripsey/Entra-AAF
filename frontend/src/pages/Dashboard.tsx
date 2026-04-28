@@ -1,21 +1,64 @@
 import React, { useState, useEffect } from 'react';
 import { getStatus, getAuditLogs } from '../services/api';
 import { SystemStatus, AuditLog } from '../types';
+import Card from '../components/common/Card';
+import Button from '../components/common/Button';
+import Badge from '../components/common/Badge';
+import { BadgeVariant } from '../components/common/Badge';
+import LoadingSpinner from '../components/common/LoadingSpinner';
+import Table from '../components/table/Table';
+import { TableColumn } from '../components/table/Table';
+import { format } from 'date-fns';
+import styles from './Dashboard.module.scss';
 
-const styles: Record<string, React.CSSProperties> = {
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
-  h1: { fontSize: '24px', fontWeight: 'bold', color: '#1a1a2e' },
-  refreshBtn: { padding: '8px 16px', background: '#0f3460', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' },
-  card: { background: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' },
-  cardTitle: { fontSize: '12px', color: '#666', textTransform: 'uppercase', marginBottom: '8px' },
-  cardValue: { fontSize: '28px', fontWeight: 'bold', color: '#1a1a2e' },
-  statusOk: { color: '#27ae60' },
-  statusErr: { color: '#c0392b' },
-  table: { width: '100%', borderCollapse: 'collapse' },
-  th: { textAlign: 'left', padding: '10px', borderBottom: '2px solid #eee', fontSize: '12px', color: '#666', textTransform: 'uppercase' },
-  td: { padding: '10px', borderBottom: '1px solid #eee', fontSize: '14px' },
-};
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  status?: 'ok' | 'error' | 'neutral';
+}
+
+function StatCard({ title, value, status = 'neutral' }: StatCardProps) {
+  const badgeMap: Record<string, BadgeVariant> = { ok: 'success', error: 'error', neutral: 'neutral' };
+  return (
+    <div className={styles.statCard}>
+      <div className={styles.statTitle}>{title}</div>
+      <div className={`${styles.statValue} ${styles[status]}`}>{value}</div>
+      <Badge variant={badgeMap[status]} dot className={styles.statBadge}>
+        {status === 'ok' ? 'Active' : status === 'error' ? 'Inactive' : 'Unknown'}
+      </Badge>
+    </div>
+  );
+}
+
+const logColumns: TableColumn<AuditLog>[] = [
+  {
+    key: 'timestamp',
+    header: 'Timestamp',
+    render: (log) => {
+      try { return format(new Date(log.timestamp), 'MMM d, HH:mm:ss'); } catch { return log.timestamp; }
+    },
+  },
+  {
+    key: 'action',
+    header: 'Action',
+    render: (log) => {
+      const isFailure = log.action.includes('fail') || log.action.includes('reject') || log.action.includes('error');
+      const isSuccess = log.action.includes('success') || log.action.includes('issued') || log.action === 'admin_login';
+      const variant: BadgeVariant = isFailure ? 'error' : isSuccess ? 'success' : 'info';
+      return <Badge variant={variant}>{log.action}</Badge>;
+    },
+  },
+  {
+    key: 'user',
+    header: 'User',
+    render: (log) => log.user ?? '—',
+  },
+  {
+    key: 'ip_address',
+    header: 'IP Address',
+    render: (log) => log.ip_address ?? '—',
+  },
+];
 
 export default function Dashboard() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -37,61 +80,77 @@ export default function Dashboard() {
 
   useEffect(() => { void load(); }, []);
 
+  const uptimeFormatted = status?.uptime
+    ? `${Math.floor(status.uptime / 3600)}h ${Math.floor((status.uptime % 3600) / 60)}m`
+    : '—';
+
   return (
-    <div>
-      <div style={styles.header}>
-        <h1 style={styles.h1}>Dashboard</h1>
-        <button style={styles.refreshBtn} onClick={() => void load()}>Refresh</button>
+    <div className={styles.page}>
+      <div className={styles.pageHeader}>
+        <div>
+          <h1 className={styles.pageTitle}>Dashboard</h1>
+          <p className={styles.pageSubtitle}>System overview and recent activity</p>
+        </div>
+        <Button
+          variant="secondary"
+          onClick={() => void load()}
+          leftIcon={
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          }
+        >
+          Refresh
+        </Button>
       </div>
 
-      <div style={styles.grid}>
-        <div style={styles.card}>
-          <div style={styles.cardTitle}>System Status</div>
-          <div style={{ ...styles.cardValue, ...(status?.status === 'healthy' ? styles.statusOk : styles.statusErr) }}>
-            {loading ? '...' : status?.status || 'unknown'}
-          </div>
+      {/* Status Cards */}
+      {loading ? (
+        <LoadingSpinner label="Loading system status…" />
+      ) : (
+        <div className={styles.statsGrid}>
+          <StatCard
+            title="System Status"
+            value={status?.status ?? 'unknown'}
+            status={status?.status === 'healthy' ? 'ok' : 'error'}
+          />
+          <StatCard title="Uptime" value={uptimeFormatted} status="ok" />
+          <StatCard
+            title="Entra ID"
+            value={status?.entraConfigured ? 'Configured' : 'Not Set'}
+            status={status?.entraConfigured ? 'ok' : 'error'}
+          />
+          <StatCard
+            title="AAF"
+            value={status?.aafConfigured ? 'Configured' : 'Not Set'}
+            status={status?.aafConfigured ? 'ok' : 'error'}
+          />
+          <StatCard title="Version" value={status?.version ?? '—'} status="neutral" />
         </div>
-        <div style={styles.card}>
-          <div style={styles.cardTitle}>Uptime (s)</div>
-          <div style={styles.cardValue}>{status?.uptime ?? '...'}</div>
-        </div>
-        <div style={styles.card}>
-          <div style={styles.cardTitle}>Entra ID</div>
-          <div style={{ ...styles.cardValue, ...(status?.entraConfigured ? styles.statusOk : styles.statusErr) }}>
-            {status?.entraConfigured ? 'Configured' : 'Not Set'}
-          </div>
-        </div>
-        <div style={styles.card}>
-          <div style={styles.cardTitle}>AAF</div>
-          <div style={{ ...styles.cardValue, ...(status?.aafConfigured ? styles.statusOk : styles.statusErr) }}>
-            {status?.aafConfigured ? 'Configured' : 'Not Set'}
-          </div>
-        </div>
-      </div>
+      )}
 
-      <div style={styles.card}>
-        <h2 style={{ marginBottom: '16px', fontSize: '18px' }}>Recent Audit Logs</h2>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Timestamp</th>
-              <th style={styles.th}>Action</th>
-              <th style={styles.th}>User</th>
-              <th style={styles.th}>IP</th>
-            </tr>
-          </thead>
-          <tbody>
-            {logs.map((log) => (
-              <tr key={log.id}>
-                <td style={styles.td}>{new Date(log.timestamp).toLocaleString()}</td>
-                <td style={styles.td}>{log.action}</td>
-                <td style={styles.td}>{log.user || '-'}</td>
-                <td style={styles.td}>{log.ip_address || '-'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Recent Logs */}
+      <Card>
+        <Card.Header
+          actions={
+            <Button variant="ghost" size="sm" onClick={() => window.location.href = '/audit-logs'}>
+              View All →
+            </Button>
+          }
+        >
+          <h2 className={styles.sectionTitle}>Recent Audit Events</h2>
+        </Card.Header>
+        <Card.Body>
+          <Table<AuditLog>
+            columns={logColumns}
+            data={logs}
+            rowKey={(log) => log.id}
+            loading={loading}
+            emptyMessage="No recent audit events"
+          />
+        </Card.Body>
+      </Card>
     </div>
   );
 }

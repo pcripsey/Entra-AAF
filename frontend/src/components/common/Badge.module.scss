@@ -1,0 +1,29 @@
+@use '../../styles/variables' as *;
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-1;
+  padding: 2px $space-2;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  border-radius: $border-radius-pill;
+  line-height: 1.4;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.primary  { background: rgba($color-primary, 0.1);  color: $color-primary-dark; }
+.success  { background: $color-success-light;        color: $color-success-dark; }
+.warning  { background: $color-warning-light;        color: $color-warning-dark; }
+.error    { background: $color-error-light;          color: $color-error-dark; }
+.info     { background: $color-info-light;           color: $color-info-dark; }
+.neutral  { background: $color-neutral-light;        color: $color-neutral-dark; }

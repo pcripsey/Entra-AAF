@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { getAuditLogs } from '../services/api';
 import { AuditLog } from '../types';
+import Card from '../components/common/Card';
+import Badge from '../components/common/Badge';
+import { BadgeVariant } from '../components/common/Badge';
+import Button from '../components/common/Button';
+import Table from '../components/table/Table';
+import { TableColumn } from '../components/table/Table';
+import { format } from 'date-fns';
+import styles from './AuditLogs.module.scss';
 
 type FilterCategory = 'all' | 'auth' | 'failures' | 'admin' | 'system';
 
@@ -28,67 +36,80 @@ const SUCCESS_ACTIONS = new Set([
   'authentication_success', 'authorize_request', 'token_issued', 'admin_login',
 ]);
 
-function rowBackground(action: string): string {
-  if (FAILURE_ACTIONS.has(action)) return '#fff5f5';
-  if (SUCCESS_ACTIONS.has(action)) return '#f0fff4';
-  return '#fff';
+function getActionBadge(action: string): BadgeVariant {
+  if (FAILURE_ACTIONS.has(action)) return 'error';
+  if (SUCCESS_ACTIONS.has(action)) return 'success';
+  return 'info';
 }
-
-function badgeStyle(action: string): React.CSSProperties {
-  const base: React.CSSProperties = { padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 600 };
-  if (FAILURE_ACTIONS.has(action)) return { ...base, background: '#fde8e8', color: '#c0392b' };
-  if (SUCCESS_ACTIONS.has(action)) return { ...base, background: '#d4edda', color: '#27ae60' };
-  return { ...base, background: '#e8f0fe', color: '#1a73e8' };
-}
-
-function legendDotStyle(color: string): React.CSSProperties {
-  return { display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: color, marginRight: '4px' };
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
-  h1: { fontSize: '24px', fontWeight: 'bold', color: '#1a1a2e' },
-  card: { background: '#fff', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' },
-  filterBar: { display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' },
-  filterLabel: { fontSize: '13px', color: '#666', marginRight: '4px' },
-  filterBtn: { padding: '5px 14px', border: '1px solid #ddd', borderRadius: '20px', cursor: 'pointer', background: '#fff', fontSize: '13px' },
-  filterBtnActive: { background: '#0f3460', color: '#fff', border: '1px solid #0f3460', fontWeight: 600 },
-  table: { width: '100%', borderCollapse: 'collapse' },
-  th: { textAlign: 'left', padding: '10px', borderBottom: '2px solid #eee', fontSize: '12px', color: '#666', textTransform: 'uppercase' },
-  td: { padding: '10px', borderBottom: '1px solid #eee', fontSize: '14px' },
-  pagination: { display: 'flex', gap: '8px', marginTop: '16px', alignItems: 'center' },
-  pageBtn: { padding: '6px 12px', border: '1px solid #ddd', borderRadius: '4px', cursor: 'pointer', background: '#fff' },
-  pageBtnActive: { background: '#0f3460', color: '#fff', border: '1px solid #0f3460' },
-  legend: { display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '12px', color: '#666' },
-};
 
 const FILTER_LABELS: Record<FilterCategory, string> = {
-  all: 'All',
+  all: 'All Events',
   auth: 'Auth Events',
-  failures: 'Failures Only',
+  failures: 'Failures',
   admin: 'Admin Actions',
   system: 'System Errors',
 };
+
+const columns: TableColumn<AuditLog>[] = [
+  {
+    key: 'timestamp',
+    header: 'Timestamp',
+    sortable: true,
+    render: (log) => {
+      try { return format(new Date(log.timestamp), 'MMM d, yyyy HH:mm:ss'); } catch { return log.timestamp; }
+    },
+    width: 190,
+  },
+  {
+    key: 'action',
+    header: 'Action',
+    render: (log) => (
+      <Badge variant={getActionBadge(log.action)}>{log.action}</Badge>
+    ),
+  },
+  {
+    key: 'user',
+    header: 'User',
+    sortable: true,
+    render: (log) => log.user ?? '—',
+  },
+  {
+    key: 'ip_address',
+    header: 'IP Address',
+    render: (log) => log.ip_address ?? '—',
+  },
+  {
+    key: 'details',
+    header: 'Details',
+    render: (log) => log.details
+      ? <span className={styles.details} title={log.details}>{log.details}</span>
+      : '—',
+  },
+];
 
 export default function AuditLogs() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [filter, setFilter] = useState<FilterCategory>('all');
+  const [loading, setLoading] = useState(true);
   const limit = 20;
 
   const load = async (p: number, f: FilterCategory) => {
-    const actions = FILTER_ACTIONS[f];
-    const actionsParam = actions.length > 0 ? actions.join(',') : undefined;
-    const res = await getAuditLogs(p, limit, actionsParam);
-    const data = res.data as { logs: AuditLog[]; total: number };
-    setLogs(data.logs);
-    setTotal(data.total);
+    setLoading(true);
+    try {
+      const actions = FILTER_ACTIONS[f];
+      const actionsParam = actions.length > 0 ? actions.join(',') : undefined;
+      const res = await getAuditLogs(p, limit, actionsParam);
+      const data = res.data as { logs: AuditLog[]; total: number };
+      setLogs(data.logs);
+      setTotal(data.total);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { void load(page, filter); }, [page, filter]);
-
-  const totalPages = Math.ceil(total / limit);
 
   const handleFilterChange = (f: FilterCategory) => {
     setFilter(f);
@@ -96,63 +117,60 @@ export default function AuditLogs() {
   };
 
   return (
-    <div>
-      <div style={styles.header}>
-        <h1 style={styles.h1}>User Access Log</h1>
-        <span style={{ color: '#666' }}>{total} total entries</span>
+    <div className={styles.page}>
+      <div className={styles.pageHeader}>
+        <div>
+          <h1 className={styles.pageTitle}>User Access Log</h1>
+          <p className={styles.pageSubtitle}>{total} total entries</p>
+        </div>
       </div>
-      <div style={styles.card}>
-        <div style={styles.filterBar}>
-          <span style={styles.filterLabel}>Filter:</span>
-          {(Object.keys(FILTER_LABELS) as FilterCategory[]).map((f) => (
-            <button
-              key={f}
-              style={{ ...styles.filterBtn, ...(filter === f ? styles.filterBtnActive : {}) }}
-              onClick={() => handleFilterChange(f)}
-            >
-              {FILTER_LABELS[f]}
-            </button>
-          ))}
-        </div>
-        <div style={styles.legend}>
-          <span><span style={legendDotStyle('#27ae60')} />Success</span>
-          <span><span style={legendDotStyle('#c0392b')} />Failure / Rejected</span>
-          <span><span style={legendDotStyle('#1a73e8')} />Admin / Info</span>
-        </div>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Timestamp</th>
-              <th style={styles.th}>Action</th>
-              <th style={styles.th}>User</th>
-              <th style={styles.th}>IP Address</th>
-              <th style={styles.th}>Details</th>
-            </tr>
-          </thead>
-          <tbody>
-            {logs.length === 0 ? (
-              <tr><td style={styles.td} colSpan={5}>No logs found</td></tr>
-            ) : logs.map((log) => (
-              <tr key={log.id} style={{ background: rowBackground(log.action) }}>
-                <td style={styles.td}>{new Date(log.timestamp).toLocaleString()}</td>
-                <td style={styles.td}><span style={badgeStyle(log.action)}>{log.action}</span></td>
-                <td style={styles.td}>{log.user || '-'}</td>
-                <td style={styles.td}>{log.ip_address || '-'}</td>
-                <td style={styles.td}>{log.details || '-'}</td>
-              </tr>
+
+      <Card>
+        <Card.Header>
+          <div className={styles.filterBar} role="group" aria-label="Filter audit logs">
+            <span className={styles.filterLabel}>Filter:</span>
+            {(Object.keys(FILTER_LABELS) as FilterCategory[]).map((f) => (
+              <Button
+                key={f}
+                variant={filter === f ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => handleFilterChange(f)}
+                aria-pressed={filter === f}
+              >
+                {FILTER_LABELS[f]}
+              </Button>
             ))}
-          </tbody>
-        </table>
-        {totalPages > 1 && (
-          <div style={styles.pagination}>
-            <button style={styles.pageBtn} onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}>Prev</button>
-            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map((p) => (
-              <button key={p} style={{ ...styles.pageBtn, ...(p === page ? styles.pageBtnActive : {}) }} onClick={() => setPage(p)}>{p}</button>
-            ))}
-            <button style={styles.pageBtn} onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}>Next</button>
           </div>
-        )}
-      </div>
+        </Card.Header>
+        <Card.Body>
+          <div className={styles.legend}>
+            <span className={styles.legendItem}>
+              <span className={`${styles.legendDot} ${styles.success}`} aria-hidden="true" />
+              Success
+            </span>
+            <span className={styles.legendItem}>
+              <span className={`${styles.legendDot} ${styles.failure}`} aria-hidden="true" />
+              Failure / Rejected
+            </span>
+            <span className={styles.legendItem}>
+              <span className={`${styles.legendDot} ${styles.info}`} aria-hidden="true" />
+              Admin / Info
+            </span>
+          </div>
+
+          <Table<AuditLog>
+            columns={columns}
+            data={logs}
+            rowKey={(log) => log.id}
+            loading={loading}
+            emptyMessage="No logs found for this filter"
+            page={page}
+            pageSize={limit}
+            totalCount={total}
+            onPageChange={setPage}
+          />
+        </Card.Body>
+      </Card>
     </div>
   );
 }

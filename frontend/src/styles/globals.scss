@@ -1,0 +1,168 @@
+@use 'variables' as *;
+@use 'mixins' as *;
+
+// ============================================================
+// Global Reset & Base Styles
+// ============================================================
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: $font-family;
+  font-size: $font-size-base;
+  font-weight: $font-weight-normal;
+  line-height: $line-height-normal;
+  color: $text-primary;
+  background-color: $bg-page;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// ------------------------------------
+// Typography
+// ------------------------------------
+h1, h2, h3, h4, h5, h6 {
+  font-weight: $font-weight-semibold;
+  line-height: $line-height-tight;
+  color: $text-primary;
+  margin-bottom: $space-4;
+}
+
+h1 { font-size: $font-size-2xl; }
+h2 { font-size: $font-size-xl; }
+h3 { font-size: $font-size-lg; }
+h4 { font-size: $font-size-md; }
+h5 { font-size: $font-size-base; }
+h6 { font-size: $font-size-sm; }
+
+p {
+  margin-bottom: $space-4;
+  line-height: $line-height-normal;
+  &:last-child { margin-bottom: 0; }
+}
+
+a {
+  color: $text-link;
+  text-decoration: none;
+  transition: color $transition-fast;
+  &:hover { color: $color-primary-dark; text-decoration: underline; }
+}
+
+strong, b { font-weight: $font-weight-semibold; }
+
+code, pre {
+  font-family: $font-mono;
+  font-size: 0.9em;
+}
+
+code {
+  background: $bg-hover;
+  padding: 0 $space-1;
+  border-radius: $border-radius-sm;
+  color: $color-error-dark;
+}
+
+// ------------------------------------
+// Form elements
+// ------------------------------------
+button, input, optgroup, select, textarea {
+  font-family: inherit;
+  font-size: 100%;
+  line-height: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+}
+
+// ------------------------------------
+// Images & media
+// ------------------------------------
+img, svg {
+  vertical-align: middle;
+  max-width: 100%;
+}
+
+// ------------------------------------
+// Tables
+// ------------------------------------
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+// ------------------------------------
+// Lists
+// ------------------------------------
+ul, ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+// ------------------------------------
+// Scrollbar
+// ------------------------------------
+* {
+  @include custom-scrollbar;
+}
+
+// ------------------------------------
+// Focus outline (accessibility)
+// ------------------------------------
+:focus-visible {
+  outline: 2px solid $color-primary;
+  outline-offset: 2px;
+}
+
+// ------------------------------------
+// Transitions
+// ------------------------------------
+.fade-enter {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.fade-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity $transition-normal, transform $transition-normal;
+}
+
+.fade-exit {
+  opacity: 1;
+}
+
+.fade-exit-active {
+  opacity: 0;
+  transition: opacity $transition-fast;
+}
+
+// ------------------------------------
+// Print styles
+// ------------------------------------
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+}

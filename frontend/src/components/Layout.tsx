@@ -1,34 +1,80 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import classNames from 'classnames';
 import { logout } from '../services/api';
+import styles from './Layout.module.scss';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 const navItems = [
-  { path: '/', label: 'Dashboard' },
-  { path: '/config/entra', label: 'Entra ID Config' },
-  { path: '/config/aaf', label: 'AAF Config' },
-  { path: '/sessions', label: 'Sessions' },
-  { path: '/attribute-mapping', label: 'Attribute Mapping' },
-  { path: '/audit-logs', label: 'User Access Log' },
+  {
+    path: '/',
+    label: 'Dashboard',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+        <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+      </svg>
+    ),
+  },
+  {
+    path: '/config/entra',
+    label: 'Entra ID Config',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" /><path d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+      </svg>
+    ),
+  },
+  {
+    path: '/config/aaf',
+    label: 'AAF Config',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+      </svg>
+    ),
+  },
+  {
+    path: '/sessions',
+    label: 'Sessions',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    ),
+  },
+  {
+    path: '/attribute-mapping',
+    label: 'Attribute Mapping',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 0 1 4-4h14" />
+        <polyline points="7 23 3 19 7 15" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+      </svg>
+    ),
+  },
+  {
+    path: '/audit-logs',
+    label: 'User Access Log',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" />
+        <line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" />
+      </svg>
+    ),
+  },
 ];
-
-const styles: Record<string, React.CSSProperties> = {
-  container: { display: 'flex', minHeight: '100vh' },
-  sidebar: { width: '240px', background: '#1a1a2e', color: '#fff', display: 'flex', flexDirection: 'column' },
-  sidebarTitle: { padding: '20px', fontSize: '18px', fontWeight: 'bold', borderBottom: '1px solid #333' },
-  nav: { flex: 1, padding: '10px 0' },
-  navLink: { display: 'block', padding: '12px 20px', color: '#ccc', textDecoration: 'none' },
-  navLinkActive: { background: '#16213e', color: '#fff', borderLeft: '3px solid #0f3460' },
-  logoutBtn: { margin: '20px', padding: '10px', background: '#c0392b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' },
-  main: { flex: 1, padding: '30px', overflow: 'auto' },
-};
 
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [collapsed, setCollapsed] = useState(false);
+  const username = localStorage.getItem('username') ?? 'Admin';
 
   const handleLogout = async () => {
     await logout();
@@ -38,23 +84,92 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.sidebar}>
-        <div style={styles.sidebarTitle}>Entra-AAF Bridge</div>
-        <nav style={styles.nav}>
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              style={{ ...styles.navLink, ...(location.pathname === item.path ? styles.navLinkActive : {}) }}
-            >
-              {item.label}
-            </Link>
-          ))}
+    <div className={classNames(styles.container, { [styles.sidebarCollapsed]: collapsed })}>
+      {/* Sidebar */}
+      <aside className={styles.sidebar} aria-label="Main navigation">
+        <div className={styles.sidebarHeader}>
+          <div className={styles.logo}>
+            <div className={styles.logoIcon}>E</div>
+            {!collapsed && (
+              <div className={styles.logoText}>
+                <span className={styles.logoTitle}>Entra-AAF</span>
+                <span className={styles.logoSubtitle}>Admin Console</span>
+              </div>
+            )}
+          </div>
+          <button
+            className={styles.collapseBtn}
+            onClick={() => setCollapsed((c) => !c)}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            type="button"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {collapsed
+                ? <><polyline points="9 18 15 12 9 6" /></>
+                : <><polyline points="15 18 9 12 15 6" /></>
+              }
+            </svg>
+          </button>
+        </div>
+
+        <nav className={styles.nav} aria-label="Primary">
+          {navItems.map((item) => {
+            const isActive = location.pathname === item.path ||
+              (item.path !== '/' && location.pathname.startsWith(item.path));
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={classNames(styles.navLink, { [styles.active]: isActive })}
+                aria-current={isActive ? 'page' : undefined}
+                title={collapsed ? item.label : undefined}
+              >
+                <span className={styles.navIcon}>{item.icon}</span>
+                {!collapsed && <span className={styles.navLabel}>{item.label}</span>}
+              </Link>
+            );
+          })}
         </nav>
-        <button style={styles.logoutBtn} onClick={() => { void handleLogout(); }}>Logout</button>
+
+        <div className={styles.sidebarFooter}>
+          <div className={styles.userInfo} title={collapsed ? username : undefined}>
+            <div className={styles.avatar} aria-hidden="true">{username.charAt(0).toUpperCase()}</div>
+            {!collapsed && <span className={styles.username}>{username}</span>}
+          </div>
+          <button
+            className={styles.logoutBtn}
+            onClick={() => { void handleLogout(); }}
+            title={collapsed ? 'Logout' : undefined}
+            aria-label="Logout"
+            type="button"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            {!collapsed && <span>Logout</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <div className={styles.main}>
+        <header className={styles.topbar}>
+          <div className={styles.breadcrumb}>
+            {navItems.find((n) => n.path === location.pathname || (n.path !== '/' && location.pathname.startsWith(n.path)))?.label ?? 'Dashboard'}
+          </div>
+          <div className={styles.topbarRight}>
+            <div className={styles.topbarUser}>
+              <div className={styles.avatarSm}>{username.charAt(0).toUpperCase()}</div>
+              <span>{username}</span>
+            </div>
+          </div>
+        </header>
+        <main className={styles.content} id="main-content" tabIndex={-1}>
+          {children}
+        </main>
       </div>
-      <main style={styles.main}>{children}</main>
     </div>
   );
 }

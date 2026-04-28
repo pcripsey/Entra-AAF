@@ -1,0 +1,83 @@
+@use '../../styles/variables' as *;
+
+.container {
+  position: fixed;
+  bottom: $space-6;
+  right: $space-6;
+  z-index: $z-index-toast;
+  display: flex;
+  flex-direction: column;
+  gap: $space-2;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: $space-3;
+  padding: $space-3 $space-4;
+  border-radius: $border-radius-md;
+  box-shadow: $shadow-lg;
+  min-width: 280px;
+  max-width: 400px;
+  border-left: 4px solid;
+  pointer-events: auto;
+  animation: slideUp 0.25s ease;
+}
+
+.content {
+  flex: 1;
+}
+
+.title {
+  font-weight: $font-weight-semibold;
+  font-size: $font-size-base;
+  margin-bottom: 2px;
+}
+
+.message {
+  font-size: $font-size-sm;
+  line-height: $line-height-normal;
+}
+
+.close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.6;
+  padding: 0;
+  flex-shrink: 0;
+  &:hover { opacity: 1; }
+}
+
+.success {
+  background: #fff;
+  border-color: $color-success;
+  color: $color-success-dark;
+}
+
+.error {
+  background: #fff;
+  border-color: $color-error;
+  color: $color-error-dark;
+}
+
+.warning {
+  background: #fff;
+  border-color: $color-warning;
+  color: $color-warning-dark;
+}
+
+.info {
+  background: #fff;
+  border-color: $color-info;
+  color: $color-info-dark;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}

@@ -1,0 +1,85 @@
+@use '../styles/variables' as *;
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: $space-6;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $space-4;
+}
+
+.pageTitle {
+  font-size: $font-size-2xl;
+  font-weight: $font-weight-bold;
+  color: $text-primary;
+  margin-bottom: $space-1;
+}
+
+.pageSubtitle {
+  font-size: $font-size-sm;
+  color: $text-secondary;
+  margin: 0;
+}
+
+.alert {
+  margin-bottom: $space-4;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.th {
+  padding: $space-3 $space-4;
+  text-align: left;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $text-secondary;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid $border-color;
+  white-space: nowrap;
+  background: $bg-page;
+}
+
+.tr {
+  border-bottom: 1px solid $border-color;
+  &:hover { background: $bg-hover; }
+}
+
+.td {
+  padding: $space-2 $space-4;
+  vertical-align: middle;
+}
+
+.tdArrow {
+  padding: $space-2;
+  text-align: center;
+  color: $text-muted;
+  font-size: $font-size-lg;
+  vertical-align: middle;
+  width: 32px;
+}
+
+.tdAction {
+  padding: $space-2 $space-4;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.emptyCell {
+  padding: $space-8;
+  text-align: center;
+  color: $text-muted;
+  font-size: $font-size-base;
+}

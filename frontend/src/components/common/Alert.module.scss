@@ -1,0 +1,67 @@
+@use '../../styles/variables' as *;
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: $space-3;
+  padding: $space-3 $space-4;
+  border-radius: $border-radius-sm;
+  border-left: 4px solid;
+  font-size: $font-size-base;
+}
+
+.icon {
+  font-size: $font-size-md;
+  flex-shrink: 0;
+  line-height: 1.3;
+  font-weight: $font-weight-bold;
+}
+
+.content {
+  flex: 1;
+  line-height: $line-height-normal;
+}
+
+.title {
+  font-weight: $font-weight-semibold;
+  margin-bottom: $space-1;
+}
+
+.close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.6;
+  padding: 0;
+  margin-left: $space-2;
+  flex-shrink: 0;
+  align-self: flex-start;
+  &:hover { opacity: 1; }
+}
+
+.success {
+  background: $color-success-light;
+  color: $color-success-dark;
+  border-color: $color-success;
+}
+
+.warning {
+  background: $color-warning-light;
+  color: $color-warning-dark;
+  border-color: $color-warning;
+}
+
+.error {
+  background: $color-error-light;
+  color: $color-error-dark;
+  border-color: $color-error;
+}
+
+.info {
+  background: $color-info-light;
+  color: $color-info-dark;
+  border-color: $color-info;
+}
