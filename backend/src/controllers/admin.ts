@@ -3,7 +3,7 @@ import { config } from '../config';
 import { getEntraConfig, setEntraConfig, getAafConfig, setAafConfig, getAttributeMappings, setAttributeMappings } from '../models/config';
 import { getAuditLogs, getAuditLogsCount, createAuditLog } from '../models/auditLog';
 import { getActiveSessions } from '../services/sessionService';
-import { invalidateClientCache } from '../services/oidcClientService';
+import { invalidateClientCache, decodeIdTokenHint } from '../services/oidcClientService';
 
 const startTime = Date.now();
 
@@ -94,14 +94,35 @@ export function getSessions(req: Request, res: Response): void {
   const sessions = getActiveSessions();
   const sanitized = sessions.map((s) => {
     let user = 'pending';
+    let email: string | null = null;
+    let sub: string | null = null;
+
     if (s.user_claims) {
       const claims = JSON.parse(s.user_claims) as Record<string, unknown>;
       user = (claims['preferred_username'] as string) || (claims['email'] as string) || 'unknown';
+      email = (claims['email'] as string) || (claims['upn'] as string) || null;
+      sub = (claims['sub'] as string) || (claims['oid'] as string) || null;
     }
+
+    const id_token_hint_decoded = s.id_token_hint ? decodeIdTokenHint(s.id_token_hint) : null;
+
+    // Fall back to id_token_hint for email/sub if not in user_claims
+    if (id_token_hint_decoded) {
+      if (!email) {
+        email = (id_token_hint_decoded['email'] as string) || (id_token_hint_decoded['upn'] as string) || null;
+      }
+      if (!sub) {
+        sub = (id_token_hint_decoded['sub'] as string) || (id_token_hint_decoded['oid'] as string) || null;
+      }
+    }
+
     return {
       id: s.id,
       state: s.state,
       user,
+      email,
+      sub,
+      id_token_hint_decoded,
       created_at: s.created_at,
       expires_at: s.expires_at,
       status: s.user_claims ? 'authenticated' : 'pending',

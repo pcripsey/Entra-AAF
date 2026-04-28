@@ -15,6 +15,9 @@ export interface Session {
   id: string;
   state: string;
   user: string;
+  email: string | null;
+  sub: string | null;
+  id_token_hint_decoded: Record<string, unknown> | null;
   created_at: string;
   expires_at: string;
   status: string;
