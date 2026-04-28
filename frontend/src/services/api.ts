@@ -39,8 +39,8 @@ export const updateAafConfig = (config: object) => api.put('/admin/config/aaf', 
 
 export const getSessions = () => api.get('/admin/sessions');
 
-export const getAuditLogs = (page = 1, limit = 20) =>
-  api.get('/admin/audit-logs', { params: { page, limit } });
+export const getAuditLogs = (page = 1, limit = 20, actions?: string) =>
+  api.get('/admin/audit-logs', { params: { page, limit, ...(actions ? { actions } : {}) } });
 
 export const getAttributeMappings = () => api.get('/admin/attribute-mappings');
 export const updateAttributeMappings = (mappings: object) =>

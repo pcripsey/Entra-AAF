@@ -135,8 +135,10 @@ export function getAuditLogsController(req: Request, res: Response): void {
   const page = parseInt((req.query['page'] as string) || '1', 10);
   const limit = parseInt((req.query['limit'] as string) || '20', 10);
   const offset = (page - 1) * limit;
-  const logs = getAuditLogs(limit, offset);
-  const total = getAuditLogsCount();
+  const actionsParam = req.query['actions'] as string | undefined;
+  const actions = actionsParam ? actionsParam.split(',').filter(Boolean) : undefined;
+  const logs = getAuditLogs(limit, offset, actions);
+  const total = getAuditLogsCount(actions);
   res.json({ logs, total, page, limit });
 }
 
