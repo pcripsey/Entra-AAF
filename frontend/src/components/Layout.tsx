@@ -12,7 +12,7 @@ const navItems = [
   { path: '/config/aaf', label: 'AAF Config' },
   { path: '/sessions', label: 'Sessions' },
   { path: '/attribute-mapping', label: 'Attribute Mapping' },
-  { path: '/audit-logs', label: 'Audit Logs' },
+  { path: '/audit-logs', label: 'User Access Log' },
 ];
 
 const styles: Record<string, React.CSSProperties> = {

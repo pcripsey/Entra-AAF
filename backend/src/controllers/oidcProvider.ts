@@ -42,16 +42,19 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
     const aafRedirectUris = aafConfig.redirectUris.length ? aafConfig.redirectUris : config.aaf.redirectUris;
 
     if (client_id !== aafClientId) {
+      createAuditLog('authorize_rejected', client_id || null, 'Unknown client_id', req.ip || null);
       res.status(400).json({ error: 'invalid_client', error_description: 'Unknown client_id' });
       return;
     }
 
     if (!aafRedirectUris.includes(redirect_uri)) {
+      createAuditLog('authorize_rejected', client_id, `Invalid redirect_uri: ${redirect_uri}`, req.ip || null);
       res.status(400).json({ error: 'invalid_request', error_description: 'Invalid redirect_uri' });
       return;
     }
 
     if (response_type !== 'code') {
+      createAuditLog('authorize_rejected', client_id, `Unsupported response_type: ${response_type}`, req.ip || null);
       res.status(400).json({ error: 'unsupported_response_type' });
       return;
     }
@@ -92,17 +95,20 @@ export async function callback(req: Request, res: Response, next: NextFunction):
 
     if (error) {
       logger.error(`Entra callback error: ${error} - ${error_description}`);
+      createAuditLog('authentication_failure', null, `Entra error: ${error} – ${error_description || ''}`, req.ip || null);
       res.status(400).send(`Authentication error: ${error_description || error}`);
       return;
     }
 
     if (!code || !state) {
+      createAuditLog('authentication_failure', null, 'Callback missing code or state parameter', req.ip || null);
       res.status(400).send('Missing code or state');
       return;
     }
 
     const bridgeSession = getBridgeSession(state);
     if (!bridgeSession) {
+      createAuditLog('authentication_failure', null, 'Invalid or expired session state', req.ip || null);
       res.status(400).send('Invalid or expired session state');
       return;
     }
@@ -154,6 +160,7 @@ export async function token(req: Request, res: Response, next: NextFunction): Pr
     const { grant_type, code, client_id, client_secret } = req.body as Record<string, string>;
 
     if (grant_type !== 'authorization_code') {
+      createAuditLog('token_request_failed', client_id || null, `Unsupported grant_type: ${grant_type}`, req.ip || null);
       res.status(400).json({ error: 'unsupported_grant_type' });
       return;
     }
@@ -163,18 +170,21 @@ export async function token(req: Request, res: Response, next: NextFunction): Pr
     const expectedClientSecret = aafConfig.clientSecret || config.aaf.clientSecret;
 
     if (client_id !== expectedClientId || client_secret !== expectedClientSecret) {
+      createAuditLog('token_request_failed', client_id || null, 'Invalid client credentials', req.ip || null);
       res.status(401).json({ error: 'invalid_client' });
       return;
     }
 
     const sessionState = validateAuthCode(code);
     if (!sessionState) {
+      createAuditLog('token_request_failed', client_id, 'Invalid or expired authorization code', req.ip || null);
       res.status(400).json({ error: 'invalid_grant', error_description: 'Invalid or expired authorization code' });
       return;
     }
 
     const bridgeSession = getBridgeSession(sessionState);
     if (!bridgeSession || !bridgeSession.user_claims) {
+      createAuditLog('token_request_failed', client_id, 'Session not found or missing claims', req.ip || null);
       res.status(400).json({ error: 'invalid_grant', error_description: 'Session not found or missing claims' });
       return;
     }
@@ -215,6 +225,7 @@ export async function userinfo(req: Request, res: Response, next: NextFunction):
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      createAuditLog('userinfo_failed', null, 'Missing or malformed Authorization header', req.ip || null);
       res.status(401).json({ error: 'invalid_token' });
       return;
     }
@@ -223,6 +234,7 @@ export async function userinfo(req: Request, res: Response, next: NextFunction):
     const payload = await validateAccessToken(tokenStr);
 
     if (!payload) {
+      createAuditLog('userinfo_failed', null, 'Invalid or expired access token', req.ip || null);
       res.status(401).json({ error: 'invalid_token' });
       return;
     }
