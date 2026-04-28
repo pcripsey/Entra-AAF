@@ -42,6 +42,8 @@ export default function Sessions() {
               <tr>
                 <th style={styles.th}>Session ID</th>
                 <th style={styles.th}>User</th>
+                <th style={styles.th}>Email (Entra ID)</th>
+                <th style={styles.th}>Subject (oid)</th>
                 <th style={styles.th}>Created</th>
                 <th style={styles.th}>Expires</th>
                 <th style={styles.th}>Status</th>
@@ -49,11 +51,13 @@ export default function Sessions() {
             </thead>
             <tbody>
               {sessions.length === 0 ? (
-                <tr><td style={styles.td} colSpan={5}>No active sessions</td></tr>
+                <tr><td style={styles.td} colSpan={7}>No active sessions</td></tr>
               ) : sessions.map((s) => (
                 <tr key={s.id}>
                   <td style={styles.td}><code>{s.id.substring(0, 8)}...</code></td>
                   <td style={styles.td}>{s.user}</td>
+                  <td style={styles.td}>{s.email || 'N/A'}</td>
+                  <td style={styles.td}>{s.sub ? <code title={s.sub} aria-label={`Subject: ${s.sub}`}>{s.sub.substring(0, 12)}...</code> : 'N/A'}</td>
                   <td style={styles.td}>{new Date(s.created_at).toLocaleString()}</td>
                   <td style={styles.td}>{new Date(s.expires_at).toLocaleString()}</td>
                   <td style={styles.td}>
