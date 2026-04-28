@@ -4,7 +4,6 @@ dotenv.config();
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
-import morgan from 'morgan';
 import session from 'express-session';
 import { config } from './config';
 import { initializeDatabase } from './models/database';
@@ -13,13 +12,14 @@ import { logger } from './utils/logger';
 import oidcRoutes from './routes/oidc';
 import adminRoutes from './routes/admin';
 import { errorHandler } from './middleware/errorHandler';
+import { requestLogger } from './middleware/requestLogger';
 
 const app = express();
 
 app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
-app.use(morgan('combined'));
+app.use(requestLogger);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
