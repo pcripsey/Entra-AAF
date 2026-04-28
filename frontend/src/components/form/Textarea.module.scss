@@ -1,0 +1,9 @@
+@use '../../styles/variables' as *;
+@use '../../styles/mixins' as *;
+
+.textarea {
+  @include input-base;
+  min-height: 80px;
+  resize: vertical;
+  line-height: $line-height-normal;
+}

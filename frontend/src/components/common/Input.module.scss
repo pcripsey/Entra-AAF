@@ -1,0 +1,59 @@
+@use '../../styles/variables' as *;
+@use '../../styles/mixins' as *;
+
+.input {
+  @include input-base;
+
+  &.error {
+    border-color: $color-error;
+    &:focus {
+      box-shadow: 0 0 0 3px rgba($color-error, 0.15);
+    }
+  }
+}
+
+.inputGroup {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-sm;
+  overflow: hidden;
+  transition: border-color $transition-fast, box-shadow $transition-fast;
+
+  &:focus-within {
+    border-color: $border-color-focus;
+    box-shadow: 0 0 0 3px rgba($color-primary, 0.15);
+  }
+
+  &.error {
+    border-color: $color-error;
+    &:focus-within {
+      box-shadow: 0 0 0 3px rgba($color-error, 0.15);
+    }
+  }
+
+  .grouped {
+    border: none;
+    border-radius: 0;
+    flex: 1;
+    &:focus {
+      box-shadow: none;
+    }
+  }
+}
+
+.addon {
+  display: inline-flex;
+  align-items: center;
+  padding: $space-2 $space-3;
+  background: $bg-hover;
+  color: $text-secondary;
+  font-size: $font-size-sm;
+  border-right: 1px solid $border-color;
+  white-space: nowrap;
+}
+
+.addonRight {
+  border-right: none;
+  border-left: 1px solid $border-color;
+}

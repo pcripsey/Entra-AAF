@@ -1,17 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from '../services/api';
-
-const styles: Record<string, React.CSSProperties> = {
-  container: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f5f5f5' },
-  card: { background: '#fff', padding: '40px', borderRadius: '8px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)', width: '360px' },
-  title: { fontSize: '24px', fontWeight: 'bold', marginBottom: '8px', textAlign: 'center', color: '#1a1a2e' },
-  subtitle: { textAlign: 'center', color: '#666', marginBottom: '24px', fontSize: '14px' },
-  label: { display: 'block', marginBottom: '4px', fontWeight: '500', color: '#333' },
-  input: { width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px', marginBottom: '16px' },
-  button: { width: '100%', padding: '12px', background: '#0f3460', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '16px', cursor: 'pointer' },
-  error: { background: '#fee', color: '#c0392b', padding: '10px', borderRadius: '4px', marginBottom: '16px', fontSize: '14px' },
-};
+import Button from '../components/common/Button';
+import Input from '../components/common/Input';
+import Alert from '../components/common/Alert';
+import FormField from '../components/form/FormField';
+import styles from './Login.module.scss';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -30,27 +24,70 @@ export default function Login() {
       localStorage.setItem('username', (res.data as { username: string }).username);
       navigate('/');
     } catch {
-      setError('Invalid username or password');
+      setError('Invalid username or password. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <div style={styles.title}>Entra-AAF Bridge</div>
-        <div style={styles.subtitle}>Admin Console</div>
-        {error && <div style={styles.error}>{error}</div>}
-        <form onSubmit={(e) => { void handleSubmit(e); }}>
-          <label style={styles.label}>Username</label>
-          <input style={styles.input} type="text" value={username} onChange={(e) => setUsername(e.target.value)} required />
-          <label style={styles.label}>Password</label>
-          <input style={styles.input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          <button style={styles.button} type="submit" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
+    <div className={styles.container}>
+      <div className={styles.card}>
+        <div className={styles.header}>
+          <div className={styles.logoIcon} aria-hidden="true">E</div>
+          <h1 className={styles.title}>Entra-AAF Bridge</h1>
+          <p className={styles.subtitle}>Admin Console — Sign in to continue</p>
+        </div>
+
+        {error && (
+          <Alert variant="error" onClose={() => setError('')} className={styles.alert}>
+            {error}
+          </Alert>
+        )}
+
+        <form onSubmit={(e) => { void handleSubmit(e); }} noValidate>
+          <FormField label="Username" htmlFor="username" required>
+            <Input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              autoComplete="username"
+              autoFocus
+              placeholder="Enter your username"
+              aria-label="Username"
+            />
+          </FormField>
+
+          <FormField label="Password" htmlFor="password" required>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              placeholder="Enter your password"
+              aria-label="Password"
+            />
+          </FormField>
+
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            fullWidth
+            loading={loading}
+            className={styles.submitBtn}
+          >
+            {loading ? 'Signing in…' : 'Sign In'}
+          </Button>
         </form>
+
+        <div className={styles.footer}>
+          <span className={styles.footerText}>OpenText Advanced Authentication Framework</span>
+        </div>
       </div>
     </div>
   );

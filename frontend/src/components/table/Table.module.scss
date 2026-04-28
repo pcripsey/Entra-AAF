@@ -1,0 +1,134 @@
+@use '../../styles/variables' as *;
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: $space-4;
+}
+
+.tableContainer {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: $font-size-base;
+}
+
+.thead {
+  background: $bg-page;
+  &.sticky {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+}
+
+.th {
+  padding: $space-3 $space-4;
+  text-align: left;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $text-secondary;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid $border-color;
+  white-space: nowrap;
+  user-select: none;
+
+  &.sortable {
+    cursor: pointer;
+    &:hover { color: $text-primary; background: $bg-active; }
+  }
+}
+
+.thContent {
+  display: flex;
+  align-items: center;
+  gap: $space-1;
+}
+
+.sortIcon {
+  font-size: $font-size-sm;
+  color: $text-muted;
+  flex-shrink: 0;
+}
+
+.tr {
+  border-bottom: 1px solid $border-color;
+  transition: background $transition-fast;
+  &:last-child { border-bottom: none; }
+  &:hover { background: $bg-hover; }
+  &.clickable {
+    cursor: pointer;
+    &:focus { outline: 2px solid $color-primary; outline-offset: -2px; }
+  }
+}
+
+.td {
+  padding: $space-3 $space-4;
+  color: $text-primary;
+  vertical-align: middle;
+  font-size: $font-size-base;
+}
+
+.tdCenter {
+  text-align: center;
+  padding: $space-8;
+}
+
+// Alignment
+.align-left   { text-align: left; }
+.align-center { text-align: center; }
+.align-right  { text-align: right; }
+
+// Pagination
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $space-3 0;
+  flex-wrap: wrap;
+  gap: $space-2;
+}
+
+.pageInfo {
+  font-size: $font-size-sm;
+  color: $text-secondary;
+}
+
+.pageControls {
+  display: flex;
+  gap: $space-1;
+  align-items: center;
+}
+
+.pageBtn {
+  padding: $space-1 $space-3;
+  border: 1px solid $border-color;
+  border-radius: $border-radius-sm;
+  background: $bg-white;
+  color: $text-primary;
+  font-size: $font-size-sm;
+  cursor: pointer;
+  transition: background $transition-fast, border-color $transition-fast, color $transition-fast;
+  min-width: 36px;
+  text-align: center;
+
+  &:hover:not(:disabled) {
+    background: $bg-hover;
+    border-color: $border-color-dark;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  &.active {
+    background: $color-primary;
+    color: #fff;
+    border-color: $color-primary;
+  }
+}

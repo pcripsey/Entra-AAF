@@ -1,0 +1,99 @@
+@use '../../styles/variables' as *;
+@use '../../styles/mixins' as *;
+
+.btn {
+  @include button-base;
+}
+
+// Variants
+.primary {
+  background: $color-primary;
+  color: #fff;
+  border-color: $color-primary;
+  &:hover:not(:disabled) {
+    background: $color-primary-dark;
+    border-color: $color-primary-dark;
+  }
+}
+
+.secondary {
+  background: $bg-white;
+  color: $text-primary;
+  border-color: $border-color;
+  &:hover:not(:disabled) {
+    background: $bg-hover;
+  }
+}
+
+.danger {
+  background: $color-error;
+  color: #fff;
+  border-color: $color-error;
+  &:hover:not(:disabled) {
+    background: $color-error-dark;
+    border-color: $color-error-dark;
+  }
+}
+
+.ghost {
+  background: transparent;
+  color: $color-primary;
+  border-color: transparent;
+  &:hover:not(:disabled) {
+    background: rgba($color-primary, 0.08);
+  }
+}
+
+.success {
+  background: $color-success;
+  color: #fff;
+  border-color: $color-success;
+  &:hover:not(:disabled) {
+    background: $color-success-dark;
+    border-color: $color-success-dark;
+  }
+}
+
+// Sizes
+.sm {
+  padding: $space-1 $space-3;
+  font-size: $font-size-sm;
+  gap: $space-1;
+}
+
+.md {
+  padding: $space-2 $space-4;
+  font-size: $font-size-base;
+}
+
+.lg {
+  padding: $space-3 $space-6;
+  font-size: $font-size-md;
+  gap: $space-3;
+}
+
+// Modifiers
+.fullWidth {
+  width: 100%;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 1em;
+}
+
+.spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

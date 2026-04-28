@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { getAttributeMappings, updateAttributeMappings } from '../services/api';
 import { AttributeMapping } from '../types';
 import EditableSelect from '../components/EditableSelect';
+import Card from '../components/common/Card';
+import Button from '../components/common/Button';
+import Alert from '../components/common/Alert';
+import styles from './AttributeMapping.module.scss';
 
 // Common Microsoft Entra ID / OIDC source claims
 const DEFAULT_SOURCE_OPTIONS = [
@@ -18,21 +22,11 @@ const DEFAULT_TARGET_OPTIONS = [
   'groups', 'roles',
 ];
 
-const styles: Record<string, React.CSSProperties> = {
-  h1: { fontSize: '24px', fontWeight: 'bold', color: '#1a1a2e', marginBottom: '24px' },
-  card: { background: '#fff', padding: '30px', borderRadius: '8px', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' },
-  table: { width: '100%', borderCollapse: 'collapse', marginBottom: '20px' },
-  th: { textAlign: 'left', padding: '10px', borderBottom: '2px solid #eee', fontSize: '12px', color: '#666', textTransform: 'uppercase' },
-  td: { padding: '8px', borderBottom: '1px solid #eee' },
-  addBtn: { padding: '8px 16px', background: '#27ae60', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', marginRight: '10px' },
-  saveBtn: { padding: '8px 16px', background: '#0f3460', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' },
-  removeBtn: { padding: '4px 10px', background: '#c0392b', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' },
-  success: { background: '#eaffea', color: '#27ae60', padding: '10px', borderRadius: '4px', marginBottom: '16px' },
-};
-
 export default function AttributeMappingPage() {
   const [mappings, setMappings] = useState<AttributeMapping[]>([]);
   const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
   const [sourceOptions, setSourceOptions] = useState<string[]>(DEFAULT_SOURCE_OPTIONS);
   const [targetOptions, setTargetOptions] = useState<string[]>(DEFAULT_TARGET_OPTIONS);
 
@@ -59,56 +53,106 @@ export default function AttributeMappingPage() {
   };
 
   const handleSave = async () => {
+    setMsg(''); setErr('');
+    setLoading(true);
     try {
       await updateAttributeMappings(mappings);
-      setMsg('Attribute mappings saved.');
+      setMsg('Attribute mappings saved successfully.');
     } catch {
-      setMsg('Failed to save.');
+      setErr('Failed to save mappings. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div>
-      <h1 style={styles.h1}>Attribute Mapping</h1>
-      <div style={styles.card}>
-        {msg && <div style={styles.success}>{msg}</div>}
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Source (Entra Claim)</th>
-              <th style={styles.th}>Target (AAF Claim)</th>
-              <th style={styles.th}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {mappings.map((m, i) => (
-              <tr key={i}>
-                <td style={styles.td}>
-                  <EditableSelect
-                    value={m.source}
-                    options={sourceOptions}
-                    onChange={(val) => updateRow(i, 'source', val)}
-                    onAddOption={addSourceOption}
-                    placeholder="-- Select Entra Claim --"
-                  />
-                </td>
-                <td style={styles.td}>
-                  <EditableSelect
-                    value={m.target}
-                    options={targetOptions}
-                    onChange={(val) => updateRow(i, 'target', val)}
-                    onAddOption={addTargetOption}
-                    placeholder="-- Select AAF Claim --"
-                  />
-                </td>
-                <td style={styles.td}><button style={styles.removeBtn} onClick={() => removeRow(i)}>Remove</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <button style={styles.addBtn} onClick={addRow}>Add Row</button>
-        <button style={styles.saveBtn} onClick={() => void handleSave()}>Save Mappings</button>
+    <div className={styles.page}>
+      <div className={styles.pageHeader}>
+        <div>
+          <h1 className={styles.pageTitle}>Attribute Mapping</h1>
+          <p className={styles.pageSubtitle}>Map Entra ID claims to AAF target claims for OIDC token transformation</p>
+        </div>
+        <Button
+          variant="success"
+          onClick={addRow}
+          leftIcon={
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          }
+        >
+          Add Mapping
+        </Button>
       </div>
+
+      <Card>
+        <Card.Body>
+          {msg && <Alert variant="success" onClose={() => setMsg('')} className={styles.alert}>{msg}</Alert>}
+          {err && <Alert variant="error" onClose={() => setErr('')} className={styles.alert}>{err}</Alert>}
+
+          <div className={styles.tableWrapper}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.th}>Source Claim (Entra ID)</th>
+                  <th className={styles.th}>→</th>
+                  <th className={styles.th}>Target Claim (AAF)</th>
+                  <th className={styles.th}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mappings.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className={styles.emptyCell}>
+                      No mappings defined. Click "Add Mapping" to get started.
+                    </td>
+                  </tr>
+                ) : mappings.map((m, i) => (
+                  <tr key={i} className={styles.tr}>
+                    <td className={styles.td}>
+                      <EditableSelect
+                        value={m.source}
+                        options={sourceOptions}
+                        onChange={(val) => updateRow(i, 'source', val)}
+                        onAddOption={addSourceOption}
+                        placeholder="-- Select Entra Claim --"
+                      />
+                    </td>
+                    <td className={styles.tdArrow}>→</td>
+                    <td className={styles.td}>
+                      <EditableSelect
+                        value={m.target}
+                        options={targetOptions}
+                        onChange={(val) => updateRow(i, 'target', val)}
+                        onAddOption={addTargetOption}
+                        placeholder="-- Select AAF Claim --"
+                      />
+                    </td>
+                    <td className={styles.tdAction}>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => removeRow(i)}
+                        aria-label={`Remove mapping ${i + 1}`}
+                      >
+                        Remove
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card.Body>
+        <Card.Footer>
+          <Button variant="primary" onClick={() => void handleSave()} loading={loading}>
+            Save Mappings
+          </Button>
+          <Button variant="secondary" onClick={addRow}>
+            Add Row
+          </Button>
+        </Card.Footer>
+      </Card>
     </div>
   );
 }

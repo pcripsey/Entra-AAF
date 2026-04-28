@@ -1,0 +1,36 @@
+@use '../../styles/variables' as *;
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: $space-1;
+  margin-bottom: $space-5;
+  &:last-child { margin-bottom: 0; }
+}
+
+.label {
+  font-size: $font-size-base;
+  font-weight: $font-weight-medium;
+  color: $text-primary;
+  line-height: $line-height-tight;
+}
+
+.required {
+  color: $color-error;
+}
+
+.control {
+  width: 100%;
+}
+
+.error {
+  font-size: $font-size-sm;
+  color: $color-error;
+  line-height: $line-height-tight;
+}
+
+.hint {
+  font-size: $font-size-sm;
+  color: $text-muted;
+  line-height: $line-height-tight;
+}

@@ -1,0 +1,44 @@
+@use '../styles/variables' as *;
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: $space-6;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $space-4;
+}
+
+.pageTitle {
+  font-size: $font-size-2xl;
+  font-weight: $font-weight-bold;
+  color: $text-primary;
+  margin-bottom: $space-1;
+}
+
+.pageSubtitle {
+  font-size: $font-size-sm;
+  color: $text-secondary;
+  margin: 0;
+}
+
+.configCard {
+  max-width: 640px;
+}
+
+.alert {
+  margin-bottom: $space-6;
+}
+
+.formActions {
+  padding-top: $space-2;
+  display: flex;
+  gap: $space-2;
+  border-top: 1px solid $border-color;
+  margin-top: $space-6;
+  padding-top: $space-4;
+}
