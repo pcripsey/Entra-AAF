@@ -33,6 +33,8 @@ export interface AuditLog {
   user: string | null;
   details: string | null;
   ip_address: string | null;
+  source_dns: string | null;
+  destination_dns: string | null;
 }
 
 export interface AttributeMapping {

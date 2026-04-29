@@ -7,19 +7,23 @@ export interface AuditLogEntry {
   user: string | null;
   details: string | null;
   ip_address: string | null;
+  source_dns: string | null;
+  destination_dns: string | null;
 }
 
 export function createAuditLog(
   action: string,
   user: string | null,
   details: string | null,
-  ipAddress: string | null
+  ipAddress: string | null,
+  sourceDns?: string | null,
+  destinationDns?: string | null,
 ): void {
   const db = getDb();
   db.prepare(`
-    INSERT INTO audit_logs (timestamp, action, user, details, ip_address)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(new Date().toISOString(), action, user, details, ipAddress);
+    INSERT INTO audit_logs (timestamp, action, user, details, ip_address, source_dns, destination_dns)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(new Date().toISOString(), action, user, details, ipAddress, sourceDns ?? null, destinationDns ?? null);
 }
 
 export function getAuditLogs(limit = 50, offset = 0, actions?: string[]): AuditLogEntry[] {
