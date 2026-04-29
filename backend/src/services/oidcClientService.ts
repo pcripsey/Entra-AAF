@@ -2,6 +2,7 @@ import { Issuer, Client, TokenSet } from 'openid-client';
 import { getEntraConfig } from '../models/config';
 import { config } from '../config';
 import { logger } from '../utils/logger';
+import { logOutboundRequest } from '../middleware/outboundLogger';
 
 let cachedClient: Client | null = null;
 let cachedTenantId = '';
@@ -22,8 +23,9 @@ export async function getEntraClient(): Promise<Client> {
   }
 
   logger.info(`Discovering Entra ID OIDC configuration for tenant: ${tenantId}`);
-  const issuer = await Issuer.discover(
-    `https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`
+  const discoveryUrl = `https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`;
+  const issuer = await logOutboundRequest('GET', discoveryUrl, () =>
+    Issuer.discover(discoveryUrl),
   );
 
   cachedClient = new issuer.Client({
@@ -55,10 +57,14 @@ export async function generateAuthorizationUrl(state: string, nonce: string, idT
 export async function exchangeCode(code: string, state: string): Promise<TokenSet> {
   const client = await getEntraClient();
   const entraConfig = getEntraConfig();
-  const tokenSet = await client.callback(
-    entraConfig.redirectUri || config.entra.redirectUri,
-    { code, state },
-    { state }
+  // Use the token endpoint from the discovered issuer metadata for logging;
+  // client.callback() will use the same endpoint internally.
+  const tokenEndpoint =
+    (client.issuer.token_endpoint as string | undefined) ||
+    'https://login.microsoftonline.com/oauth2/v2.0/token';
+  const redirectUri = entraConfig.redirectUri || config.entra.redirectUri;
+  const tokenSet = await logOutboundRequest('POST', tokenEndpoint, () =>
+    client.callback(redirectUri, { code, state }, { state }),
   );
   return tokenSet;
 }

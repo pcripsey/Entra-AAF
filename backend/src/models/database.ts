@@ -62,6 +62,15 @@ export function initializeDatabase(): void {
     db.exec('ALTER TABLE sessions ADD COLUMN id_token_hint TEXT');
   }
 
+  // Migrate audit_logs table to add DNS columns if they don't exist
+  const auditColumns = (db.prepare('PRAGMA table_info(audit_logs)').all() as { name: string }[]).map(c => c.name);
+  if (!auditColumns.includes('source_dns')) {
+    db.exec('ALTER TABLE audit_logs ADD COLUMN source_dns TEXT');
+  }
+  if (!auditColumns.includes('destination_dns')) {
+    db.exec('ALTER TABLE audit_logs ADD COLUMN destination_dns TEXT');
+  }
+
   logger.info('Database initialized.');
 }
 
