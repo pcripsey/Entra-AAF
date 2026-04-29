@@ -193,7 +193,7 @@ export async function getBackendLogsController(req: Request, res: Response): Pro
   // Ensure the resolved file path stays within logDir
   const resolvedLogDir = path.resolve(logDir);
   const resolvedFilePath = path.resolve(filePath);
-  if (!resolvedFilePath.startsWith(resolvedLogDir + path.sep) && resolvedFilePath !== resolvedLogDir) {
+  if (!resolvedFilePath.startsWith(resolvedLogDir + path.sep)) {
     res.status(400).json({ error: 'Invalid log path.' });
     return;
   }
