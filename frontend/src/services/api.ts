@@ -46,4 +46,12 @@ export const getAttributeMappings = () => api.get('/admin/attribute-mappings');
 export const updateAttributeMappings = (mappings: object) =>
   api.put('/admin/attribute-mappings', mappings);
 
+export const getBackendLogs = (params: {
+  type?: string;
+  date?: string;
+  page?: number;
+  limit?: number;
+  search?: string;
+}) => api.get('/admin/backend-logs', { params });
+
 export default api;

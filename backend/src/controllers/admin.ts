@@ -1,4 +1,7 @@
 import { Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
+import readline from 'readline';
 import { config } from '../config';
 import { getEntraConfig, setEntraConfig, getAafConfig, setAafConfig, getAttributeMappings, setAttributeMappings } from '../models/config';
 import { getAuditLogs, getAuditLogsCount, createAuditLog } from '../models/auditLog';
@@ -162,4 +165,75 @@ export function getSystemInfo(req: Request, res: Response): void {
     uptime: Math.floor((Date.now() - startTime) / 1000),
     memoryUsage: process.memoryUsage(),
   });
+}
+
+export async function getBackendLogsController(req: Request, res: Response): Promise<void> {
+  const logDir = process.env.LOG_DIR || path.join(process.cwd(), 'logs');
+  const logType = (req.query['type'] as string) || 'app';
+  const date = (req.query['date'] as string) || new Date().toISOString().slice(0, 10);
+  const page = parseInt((req.query['page'] as string) || '1', 10);
+  const limit = parseInt((req.query['limit'] as string) || '100', 10);
+  const search = (req.query['search'] as string) || '';
+
+  // Validate logType to prevent path traversal
+  if (logType !== 'app' && logType !== 'error') {
+    res.status(400).json({ error: 'Invalid log type. Must be "app" or "error".' });
+    return;
+  }
+
+  // Validate date format (YYYY-MM-DD)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
+    return;
+  }
+
+  const filename = `${logType}-${date}.log`;
+  const filePath = path.join(logDir, filename);
+
+  // Ensure the resolved file path stays within logDir
+  const resolvedLogDir = path.resolve(logDir);
+  const resolvedFilePath = path.resolve(filePath);
+  if (!resolvedFilePath.startsWith(resolvedLogDir + path.sep) && resolvedFilePath !== resolvedLogDir) {
+    res.status(400).json({ error: 'Invalid log path.' });
+    return;
+  }
+
+  if (!fs.existsSync(filePath)) {
+    res.json({ logs: [], total: 0, page, limit });
+    return;
+  }
+
+  const lines: string[] = [];
+  const rl = readline.createInterface({ input: fs.createReadStream(filePath), crlfDelay: Infinity });
+
+  await new Promise<void>((resolve) => {
+    rl.on('line', (line) => {
+      if (line.trim()) lines.push(line);
+    });
+    rl.on('close', resolve);
+  });
+
+  // Filter by search text
+  const filtered = search
+    ? lines.filter((l) => l.toLowerCase().includes(search.toLowerCase()))
+    : lines;
+
+  // Newest first
+  const reversed = [...filtered].reverse();
+
+  const total = reversed.length;
+  const offset = (page - 1) * limit;
+  const paginated = reversed.slice(offset, offset + limit);
+
+  // Parse each log line into structured entry
+  const logLineRe = /^(\S+)\s+\[(\w+)\]\s+(.*)$/s;
+  const parsed = paginated.map((line, idx) => {
+    const match = logLineRe.exec(line);
+    if (match) {
+      return { id: offset + idx, timestamp: match[1], level: match[2], message: match[3] };
+    }
+    return { id: offset + idx, timestamp: '', level: 'INFO', message: line };
+  });
+
+  res.json({ logs: parsed, total, page, limit });
 }

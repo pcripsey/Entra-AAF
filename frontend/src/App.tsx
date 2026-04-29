@@ -10,6 +10,7 @@ import AAFConfig from './pages/AAFConfig';
 import Sessions from './pages/Sessions';
 import AttributeMapping from './pages/AttributeMapping';
 import AuditLogs from './pages/AuditLogs';
+import BackendLogs from './pages/BackendLogs';
 
 function isAuthenticated(): boolean {
   return localStorage.getItem('isAuthenticated') === 'true';
@@ -35,6 +36,7 @@ export default function App() {
             <Route path="/sessions" element={<ProtectedRoute><Sessions /></ProtectedRoute>} />
             <Route path="/attribute-mapping" element={<ProtectedRoute><AttributeMapping /></ProtectedRoute>} />
             <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
+            <Route path="/backend-logs" element={<ProtectedRoute><BackendLogs /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

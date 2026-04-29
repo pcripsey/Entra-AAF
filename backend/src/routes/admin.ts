@@ -13,6 +13,7 @@ import {
   getAttributeMappingsController,
   updateAttributeMappingsController,
   getSystemInfo,
+  getBackendLogsController,
 } from '../controllers/admin';
 
 const router = Router();
@@ -30,5 +31,6 @@ router.get('/audit-logs', requireAuth, getAuditLogsController);
 router.get('/attribute-mappings', requireAuth, getAttributeMappingsController);
 router.put('/attribute-mappings', requireAuth, updateAttributeMappingsController);
 router.get('/system', requireAuth, getSystemInfo);
+router.get('/backend-logs', requireAuth, getBackendLogsController);
 
 export default router;
