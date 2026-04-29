@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth';
 import {
   login,
@@ -13,9 +14,17 @@ import {
   getAttributeMappingsController,
   updateAttributeMappingsController,
   getSystemInfo,
+  getBackendLogsController,
 } from '../controllers/admin';
 
 const router = Router();
+
+const backendLogsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 router.post('/login', login);
 router.post('/logout', logout);
@@ -30,5 +39,6 @@ router.get('/audit-logs', requireAuth, getAuditLogsController);
 router.get('/attribute-mappings', requireAuth, getAttributeMappingsController);
 router.put('/attribute-mappings', requireAuth, updateAttributeMappingsController);
 router.get('/system', requireAuth, getSystemInfo);
+router.get('/backend-logs', requireAuth, backendLogsLimiter, getBackendLogsController);
 
 export default router;

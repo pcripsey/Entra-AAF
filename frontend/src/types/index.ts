@@ -42,6 +42,13 @@ export interface AttributeMapping {
   target: string;
 }
 
+export interface BackendLogEntry {
+  id: number;
+  timestamp: string;
+  level: string;
+  message: string;
+}
+
 export interface SystemStatus {
   status: string;
   version: string;
