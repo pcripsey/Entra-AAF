@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import EntraConfig from './pages/EntraConfig';
 import AAFConfig from './pages/AAFConfig';
+import AAFMfaConfig from './pages/AAFMfaConfig';
 import Sessions from './pages/Sessions';
 import AttributeMapping from './pages/AttributeMapping';
 import AuditLogs from './pages/AuditLogs';
@@ -35,6 +36,7 @@ export default function App() {
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/config/entra" element={<ProtectedRoute><EntraConfig /></ProtectedRoute>} />
             <Route path="/config/aaf" element={<ProtectedRoute><AAFConfig /></ProtectedRoute>} />
+            <Route path="/config/aaf-mfa" element={<ProtectedRoute><AAFMfaConfig /></ProtectedRoute>} />
             <Route path="/sessions" element={<ProtectedRoute><Sessions /></ProtectedRoute>} />
             <Route path="/attribute-mapping" element={<ProtectedRoute><AttributeMapping /></ProtectedRoute>} />
             <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />

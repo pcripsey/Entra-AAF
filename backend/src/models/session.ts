@@ -13,6 +13,9 @@ export interface BridgeSession {
   amr_claims: string | null;
   acr_claims: string | null;
   id_token_hint: string | null;
+  entra_verified: number;
+  aaf_mfa_verified: number;
+  aaf_original_state: string | null;
   created_at: string;
   expires_at: string;
 }
@@ -38,13 +41,16 @@ export function createSession(
     amr_claims: null,
     acr_claims: null,
     id_token_hint: idTokenHint || null,
+    entra_verified: 0,
+    aaf_mfa_verified: 0,
+    aaf_original_state: null,
     created_at: new Date().toISOString(),
     expires_at: expiresAt.toISOString(),
   };
   db.prepare(`
-    INSERT INTO sessions (id, state, nonce, entra_tokens, aaf_auth_code, user_claims, aaf_redirect_uri, aaf_client_id, amr_claims, acr_claims, id_token_hint, created_at, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(session.id, session.state, session.nonce, null, null, null, session.aaf_redirect_uri, session.aaf_client_id, null, null, session.id_token_hint, session.created_at, session.expires_at);
+    INSERT INTO sessions (id, state, nonce, entra_tokens, aaf_auth_code, user_claims, aaf_redirect_uri, aaf_client_id, amr_claims, acr_claims, id_token_hint, entra_verified, aaf_mfa_verified, aaf_original_state, created_at, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(session.id, session.state, session.nonce, null, null, null, session.aaf_redirect_uri, session.aaf_client_id, null, null, session.id_token_hint, 0, 0, null, session.created_at, session.expires_at);
   return session;
 }
 
@@ -75,6 +81,21 @@ export function updateSessionTokens(
 export function setAafAuthCode(state: string, code: string): void {
   const db = getDb();
   db.prepare('UPDATE sessions SET aaf_auth_code = ? WHERE state = ?').run(code, state);
+}
+
+export function markEntraVerified(state: string): void {
+  const db = getDb();
+  db.prepare('UPDATE sessions SET entra_verified = 1 WHERE state = ?').run(state);
+}
+
+export function markAafMfaVerified(state: string): void {
+  const db = getDb();
+  db.prepare('UPDATE sessions SET aaf_mfa_verified = 1 WHERE state = ?').run(state);
+}
+
+export function setAafOriginalState(state: string, aafState: string): void {
+  const db = getDb();
+  db.prepare('UPDATE sessions SET aaf_original_state = ? WHERE state = ?').run(aafState, state);
 }
 
 export function deleteSession(state: string): void {

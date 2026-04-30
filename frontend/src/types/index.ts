@@ -21,6 +21,9 @@ export interface Session {
   created_at: string;
   expires_at: string;
   status: string;
+  entra_verified: boolean;
+  aaf_mfa_verified: boolean;
+  step_up_status: 'pending_entra' | 'pending_mfa' | 'completed';
   amr_claims: string | null;
   acr_claims: string | null;
   id_token_hint: string | null;
@@ -55,4 +58,5 @@ export interface SystemStatus {
   uptime: number;
   entraConfigured: boolean;
   aafConfigured: boolean;
+  stepUpConfigured: boolean;
 }

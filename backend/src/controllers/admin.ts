@@ -3,9 +3,10 @@ import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
 import { config } from '../config';
-import { getEntraConfig, setEntraConfig, getAafConfig, setAafConfig, getAttributeMappings, setAttributeMappings } from '../models/config';
+import { getEntraConfig, setEntraConfig, getAafConfig, setAafConfig, getAttributeMappings, setAttributeMappings, getAafMfaConfig, setAafMfaConfig } from '../models/config';
 import { getAuditLogs, getAuditLogsCount, createAuditLog } from '../models/auditLog';
 import { getActiveSessions } from '../services/sessionService';
+import { isAafMfaConfigured } from '../services/aafMfaService';
 import { invalidateClientCache, decodeIdTokenHint } from '../services/oidcClientService';
 
 const startTime = Date.now();
@@ -45,6 +46,7 @@ export function getStatus(req: Request, res: Response): void {
     uptime: Math.floor((Date.now() - startTime) / 1000),
     entraConfigured: !!(entraConfig.clientId && entraConfig.tenantId),
     aafConfigured: !!(aafConfig.clientId && aafConfig.redirectUris.length),
+    stepUpConfigured: isAafMfaConfigured(),
   });
 }
 
@@ -119,6 +121,16 @@ export function getSessions(req: Request, res: Response): void {
       }
     }
 
+    // Determine the step-up flow status
+    let stepUpStatus: string;
+    if (s.aaf_mfa_verified) {
+      stepUpStatus = 'completed';
+    } else if (s.entra_verified) {
+      stepUpStatus = 'pending_mfa';
+    } else {
+      stepUpStatus = 'pending_entra';
+    }
+
     return {
       id: s.id,
       state: s.state,
@@ -129,6 +141,9 @@ export function getSessions(req: Request, res: Response): void {
       created_at: s.created_at,
       expires_at: s.expires_at,
       status: s.user_claims ? 'authenticated' : 'pending',
+      entra_verified: !!s.entra_verified,
+      aaf_mfa_verified: !!s.aaf_mfa_verified,
+      step_up_status: stepUpStatus,
     };
   });
   res.json(sanitized);
@@ -154,6 +169,31 @@ export function updateAttributeMappingsController(req: Request, res: Response): 
   setAttributeMappings(mappings);
   const sess = (req.session as unknown) as AdminSession;
   createAuditLog('attribute_mappings_updated', sess.username || 'admin', null, req.ip || null);
+  res.json({ success: true });
+}
+
+export function getAafMfaConfigController(req: Request, res: Response): void {
+  const cfg = getAafMfaConfig();
+  res.json({
+    authorizeEndpoint: cfg.authorizeEndpoint,
+    tokenEndpoint: cfg.tokenEndpoint,
+    userInfoEndpoint: cfg.userInfoEndpoint,
+    clientId: cfg.clientId,
+    clientSecret: cfg.clientSecret ? '***' : '',
+  });
+}
+
+export function updateAafMfaConfigController(req: Request, res: Response): void {
+  const { authorizeEndpoint, tokenEndpoint, userInfoEndpoint, clientId, clientSecret } = req.body as {
+    authorizeEndpoint: string;
+    tokenEndpoint: string;
+    userInfoEndpoint: string;
+    clientId: string;
+    clientSecret: string;
+  };
+  setAafMfaConfig(authorizeEndpoint, tokenEndpoint, userInfoEndpoint, clientId, clientSecret);
+  const sess = (req.session as unknown) as AdminSession;
+  createAuditLog('aaf_mfa_config_updated', sess.username || 'admin', null, req.ip || null);
   res.json({ success: true });
 }
 

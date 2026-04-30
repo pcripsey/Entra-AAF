@@ -4,13 +4,49 @@ import { config } from '../config';
 import { getJwks } from '../utils/jwks';
 import { createBridgeSession, getBridgeSession } from '../services/sessionService';
 import { generateAuthorizationUrl, exchangeCode, getUserInfo, decodeIdTokenHint } from '../services/oidcClientService';
-import { updateSessionTokens } from '../models/session';
+import { isAafMfaConfigured, generateAafMfaAuthorizationUrl, exchangeAafMfaCode } from '../services/aafMfaService';
+import { updateSessionTokens, markEntraVerified, markAafMfaVerified, setAafOriginalState, BridgeSession } from '../models/session';
 import { getAafConfig, getAttributeMappings } from '../models/config';
 import { generateAuthCode, validateAuthCode, generateIdToken, generateAccessToken, validateAccessToken } from '../services/tokenService';
 import { createAuditLog } from '../models/auditLog';
 import { logger } from '../utils/logger';
 
 type SessionWithState = { aafState?: string; bridgeState?: string };
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Merges stored AMR/ACR claims from a session into the user-claims object and
+ * adds AAF MFA markers when step-up was completed.  Mutates `userClaims`.
+ */
+function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: BridgeSession): void {
+  if (session.amr_claims) {
+    try {
+      const existing = JSON.parse(session.amr_claims) as string[];
+      userClaims['amr'] = session.aaf_mfa_verified
+        ? Array.from(new Set([...existing, 'mfa', 'aaf']))
+        : existing;
+    } catch (err) {
+      logger.warn(`Failed to parse stored AMR claims for session ${session.id}: ${String(err)}`);
+    }
+  } else if (session.aaf_mfa_verified) {
+    userClaims['amr'] = ['mfa', 'aaf'];
+  }
+
+  if (session.acr_claims) {
+    userClaims['acr'] = session.acr_claims;
+  }
+
+  if (session.aaf_mfa_verified) {
+    userClaims['aal'] = 'MFA';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// OIDC discovery + JWKS
+// ---------------------------------------------------------------------------
 
 export function discovery(req: Request, res: Response): void {
   const baseUrl = config.baseUrl;
@@ -25,13 +61,17 @@ export function discovery(req: Request, res: Response): void {
     id_token_signing_alg_values_supported: ['RS256'],
     scopes_supported: ['openid', 'profile', 'email'],
     token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic'],
-    claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'name', 'email', 'upn', 'amr', 'acr', 'auth_time'],
+    claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'name', 'email', 'upn', 'amr', 'acr', 'aal', 'auth_time'],
   });
 }
 
 export function jwks(req: Request, res: Response): void {
   res.json(getJwks());
 }
+
+// ---------------------------------------------------------------------------
+// /authorize — entry point from AAF; initiates the step-up flow
+// ---------------------------------------------------------------------------
 
 export async function authorize(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -75,13 +115,54 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
 
     createBridgeSession(bridgeState, bridgeNonce, redirect_uri, client_id, validatedHint);
 
+    // Persist the original AAF state in the DB so it survives all cross-domain
+    // redirects without relying solely on the Express session cookie.
+    if (state) {
+      setAafOriginalState(bridgeState, state);
+    }
+
     const sess = (req.session as unknown) as SessionWithState;
     sess.aafState = state;
     sess.bridgeState = bridgeState;
 
-    const authUrl = await generateAuthorizationUrl(bridgeState, bridgeNonce, validatedHint);
-
     createAuditLog('authorize_request', client_id, `redirect_uri: ${redirect_uri}`, req.ip || null);
+
+    // Begin step-up: send the user to Entra ID for first-factor authentication.
+    res.redirect(`/login/entra?state=${encodeURIComponent(bridgeState)}`);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// /login/entra — redirect user to Entra ID for first-factor authentication
+// ---------------------------------------------------------------------------
+
+export async function loginEntra(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { state: bridgeState } = req.query as Record<string, string>;
+
+    if (!bridgeState) {
+      createAuditLog('login_entra_failed', null, 'Missing state parameter', req.ip || null);
+      res.status(400).send('Missing state parameter');
+      return;
+    }
+
+    const bridgeSession = getBridgeSession(bridgeState);
+    if (!bridgeSession) {
+      createAuditLog('login_entra_failed', null, 'Invalid or expired session state', req.ip || null);
+      res.status(400).send('Invalid or expired session state');
+      return;
+    }
+
+    const sess = (req.session as unknown) as SessionWithState;
+    sess.bridgeState = bridgeState;
+
+    const authUrl = await generateAuthorizationUrl(
+      bridgeState,
+      bridgeSession.nonce || uuidv4(),
+      bridgeSession.id_token_hint
+    );
 
     res.redirect(authUrl);
   } catch (err) {
@@ -89,14 +170,18 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
   }
 }
 
-export async function callback(req: Request, res: Response, next: NextFunction): Promise<void> {
+// ---------------------------------------------------------------------------
+// /callback/entra — Entra ID redirects here after first-factor auth
+// ---------------------------------------------------------------------------
+
+export async function callbackEntra(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { code, state, error, error_description } = req.query as Record<string, string>;
 
     if (error) {
       logger.error(`Entra callback error: ${error} - ${error_description}`);
       createAuditLog('authentication_failure', null, `Entra error: ${error} – ${error_description || ''}`, req.ip || null);
-      res.status(400).send(`Authentication error: ${error_description || error}`);
+      res.status(400).json({ error: 'authentication_failed', error_description: 'Entra ID authentication failed' });
       return;
     }
 
@@ -131,29 +216,164 @@ export async function callback(req: Request, res: Response, next: NextFunction):
     }
 
     updateSessionTokens(state, { access_token: tokenSet.access_token, id_token: tokenSet.id_token }, mappedClaims, amrClaims, acrClaims);
+    markEntraVerified(state);
 
-    const authCode = generateAuthCode(state);
+    const userIdentifier =
+      (mappedClaims['preferred_username'] as string) ||
+      (mappedClaims['upn'] as string) ||
+      (mappedClaims['email'] as string) ||
+      'unknown';
+
+    createAuditLog(
+      'entra_auth_success',
+      userIdentifier,
+      `sub: ${String(mappedClaims['sub'] || mappedClaims['oid'])}`,
+      req.ip || null
+    );
+
+    if (isAafMfaConfigured()) {
+      // Step-up: proceed to AAF MFA second factor
+      res.redirect(`/login/aaf?state=${encodeURIComponent(state)}`);
+    } else {
+      // No MFA configured: generate auth code and redirect directly to AAF
+      const authCode = generateAuthCode(state);
+
+      const sess = (req.session as unknown) as SessionWithState;
+      const aafState = sess.aafState || bridgeSession.aaf_original_state || state;
+
+      const redirectUri = bridgeSession.aaf_redirect_uri || config.aaf.redirectUris[0];
+      const redirectUrl = new URL(redirectUri);
+      redirectUrl.searchParams.set('code', authCode);
+      redirectUrl.searchParams.set('state', aafState);
+
+      createAuditLog(
+        'authentication_success',
+        userIdentifier,
+        `sub: ${String(mappedClaims['sub'] || mappedClaims['oid'])}`,
+        req.ip || null
+      );
+
+      res.redirect(redirectUrl.toString());
+    }
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// /callback — backward-compatible alias for /callback/entra
+// ---------------------------------------------------------------------------
+
+export const callback = callbackEntra;
+
+// ---------------------------------------------------------------------------
+// /login/aaf — redirect user to AAF for MFA (second factor)
+// ---------------------------------------------------------------------------
+
+export async function loginAaf(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { state: bridgeState } = req.query as Record<string, string>;
+
+    if (!bridgeState) {
+      createAuditLog('login_aaf_failed', null, 'Missing state parameter', req.ip || null);
+      res.status(400).send('Missing state parameter');
+      return;
+    }
+
+    const bridgeSession = getBridgeSession(bridgeState);
+    if (!bridgeSession) {
+      createAuditLog('login_aaf_failed', null, 'Invalid or expired session state', req.ip || null);
+      res.status(400).send('Invalid or expired session state');
+      return;
+    }
+
+    if (!bridgeSession.entra_verified) {
+      createAuditLog('login_aaf_failed', null, 'Entra authentication not yet completed', req.ip || null);
+      res.status(400).send('First-factor authentication (Entra ID) has not been completed');
+      return;
+    }
+
+    const callbackUri = `${config.baseUrl}/callback/aaf`;
+    const aafMfaUrl = generateAafMfaAuthorizationUrl(bridgeState, callbackUri);
+
+    createAuditLog('aaf_mfa_initiated', null, `bridgeState: ${bridgeState}`, req.ip || null);
+
+    res.redirect(aafMfaUrl);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// /callback/aaf — AAF MFA redirects here after second-factor completion
+// ---------------------------------------------------------------------------
+
+export async function callbackAaf(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { code, state: bridgeState, error, error_description } = req.query as Record<string, string>;
+
+    if (error) {
+      logger.error(`AAF MFA callback error: ${error} - ${error_description}`);
+      createAuditLog('aaf_mfa_failure', null, `AAF error: ${error} – ${error_description || ''}`, req.ip || null);
+      res.status(400).json({ error: 'mfa_failed', error_description: 'AAF MFA authentication failed' });
+      return;
+    }
+
+    if (!bridgeState) {
+      createAuditLog('aaf_mfa_failure', null, 'Callback missing state parameter', req.ip || null);
+      res.status(400).send('Missing state parameter');
+      return;
+    }
+
+    const bridgeSession = getBridgeSession(bridgeState);
+    if (!bridgeSession) {
+      createAuditLog('aaf_mfa_failure', null, 'Invalid or expired session state', req.ip || null);
+      res.status(400).send('Invalid or expired session state');
+      return;
+    }
+
+    if (!bridgeSession.entra_verified) {
+      createAuditLog('aaf_mfa_failure', null, 'Entra auth not verified for this session', req.ip || null);
+      res.status(400).send('First-factor (Entra) authentication is missing');
+      return;
+    }
+
+    // Exchange the AAF MFA code to verify completion (if token endpoint configured)
+    if (code) {
+      const callbackUri = `${config.baseUrl}/callback/aaf`;
+      const mfaVerified = await exchangeAafMfaCode(code, bridgeState, callbackUri);
+      if (!mfaVerified) {
+        createAuditLog('aaf_mfa_failure', null, 'AAF MFA code exchange failed', req.ip || null);
+        res.status(400).send('AAF MFA verification failed');
+        return;
+      }
+    }
+
+    markAafMfaVerified(bridgeState);
+
+    // Generate the final authorization code for the original AAF OIDC client
+    const authCode = generateAuthCode(bridgeState);
 
     const sess = (req.session as unknown) as SessionWithState;
-    const aafState = sess.aafState || state;
+    const aafOriginalState = sess.aafState || bridgeSession.aaf_original_state || bridgeState;
 
     const redirectUri = bridgeSession.aaf_redirect_uri || config.aaf.redirectUris[0];
     const redirectUrl = new URL(redirectUri);
     redirectUrl.searchParams.set('code', authCode);
-    redirectUrl.searchParams.set('state', aafState);
+    redirectUrl.searchParams.set('state', aafOriginalState);
 
-    createAuditLog(
-      'authentication_success',
-      (userClaims['preferred_username'] as string) || (userClaims['upn'] as string) || 'unknown',
-      `sub: ${String(userClaims['sub'] || userClaims['oid'])}`,
-      req.ip || null
-    );
+    createAuditLog('aaf_mfa_success', null, `bridgeState: ${bridgeState}`, req.ip || null);
+    createAuditLog('authentication_success', null, `Step-up complete for bridgeState: ${bridgeState}`, req.ip || null);
 
     res.redirect(redirectUrl.toString());
   } catch (err) {
     next(err);
   }
 }
+
+// ---------------------------------------------------------------------------
+// /token — AAF exchanges the authorization code for tokens
+// ---------------------------------------------------------------------------
 
 export async function token(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -189,20 +409,19 @@ export async function token(req: Request, res: Response, next: NextFunction): Pr
       return;
     }
 
+    // When step-up is configured, both factors must be verified before tokens
+    // are issued.
+    if (isAafMfaConfigured() && !bridgeSession.aaf_mfa_verified) {
+      createAuditLog('token_request_failed', client_id, 'AAF MFA not completed for this session', req.ip || null);
+      res.status(400).json({ error: 'invalid_grant', error_description: 'Step-up MFA not completed' });
+      return;
+    }
+
     const userClaims = JSON.parse(bridgeSession.user_claims) as Record<string, unknown>;
     const sub = (userClaims['sub'] as string) || (userClaims['oid'] as string) || 'unknown';
 
-    // Merge stored AMR/ACR claims into the token payload
-    if (bridgeSession.amr_claims) {
-      try {
-        userClaims['amr'] = JSON.parse(bridgeSession.amr_claims) as string[];
-      } catch {
-        // ignore malformed stored value
-      }
-    }
-    if (bridgeSession.acr_claims) {
-      userClaims['acr'] = bridgeSession.acr_claims;
-    }
+    // Merge AMR/ACR claims and inject step-up context using the shared helper
+    enrichClaimsWithStepUp(userClaims, bridgeSession);
 
     const idToken = await generateIdToken(userClaims, client_id, bridgeSession.nonce);
     const accessToken = await generateAccessToken(sub, client_id);
@@ -220,6 +439,10 @@ export async function token(req: Request, res: Response, next: NextFunction): Pr
     next(err);
   }
 }
+
+// ---------------------------------------------------------------------------
+// /userinfo — returns claims for a valid access token
+// ---------------------------------------------------------------------------
 
 export async function userinfo(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -244,6 +467,10 @@ export async function userinfo(req: Request, res: Response, next: NextFunction):
     next(err);
   }
 }
+
+// ---------------------------------------------------------------------------
+// /entra-login — handles Entra implicit-flow token posted from the frontend
+// ---------------------------------------------------------------------------
 
 export async function entraLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -306,8 +533,13 @@ export async function entraLogin(req: Request, res: Response, next: NextFunction
     // Create bridge session for this Entra-initiated flow, storing the id_token as the hint
     createBridgeSession(bridgeState, bridgeNonce, aafRedirectUri, aafClientId, id_token);
 
+    if (aaf_state) {
+      setAafOriginalState(bridgeState, aaf_state);
+    }
+
     // Persist enriched claims and authentication context into the session
     updateSessionTokens(bridgeState, { id_token }, mappedClaims, amrClaims, acrClaims);
+    markEntraVerified(bridgeState);
 
     // Generate a short-lived authorization code for AAF
     const authCode = generateAuthCode(bridgeState);

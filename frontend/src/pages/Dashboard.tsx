@@ -126,6 +126,11 @@ export default function Dashboard() {
             value={status?.aafConfigured ? 'Configured' : 'Not Set'}
             status={status?.aafConfigured ? 'ok' : 'error'}
           />
+          <StatCard
+            title="Step-Up MFA"
+            value={status?.stepUpConfigured ? 'Enabled' : 'Disabled'}
+            status={status?.stepUpConfigured ? 'ok' : 'neutral'}
+          />
           <StatCard title="Version" value={status?.version ?? '—'} status="neutral" />
         </div>
       )}

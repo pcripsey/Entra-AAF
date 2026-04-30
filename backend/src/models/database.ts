@@ -30,6 +30,9 @@ export function initializeDatabase(): void {
       amr_claims TEXT,
       acr_claims TEXT,
       id_token_hint TEXT,
+      entra_verified INTEGER NOT NULL DEFAULT 0,
+      aaf_mfa_verified INTEGER NOT NULL DEFAULT 0,
+      aaf_original_state TEXT,
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL
     );
@@ -60,6 +63,15 @@ export function initializeDatabase(): void {
   }
   if (!sessionColumns.includes('id_token_hint')) {
     db.exec('ALTER TABLE sessions ADD COLUMN id_token_hint TEXT');
+  }
+  if (!sessionColumns.includes('entra_verified')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN entra_verified INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!sessionColumns.includes('aaf_mfa_verified')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN aaf_mfa_verified INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!sessionColumns.includes('aaf_original_state')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN aaf_original_state TEXT');
   }
 
   // Migrate audit_logs table to add DNS columns if they don't exist

@@ -70,3 +70,33 @@ export function getAttributeMappings(): Array<{ source: string; target: string }
 export function setAttributeMappings(mappings: Array<{ source: string; target: string }>): void {
   setConfig('attribute.mappings', JSON.stringify(mappings));
 }
+
+export function getAafMfaConfig(): {
+  authorizeEndpoint: string;
+  tokenEndpoint: string;
+  userInfoEndpoint: string;
+  clientId: string;
+  clientSecret: string;
+} {
+  return {
+    authorizeEndpoint: getConfig('aafMfa.authorizeEndpoint') || '',
+    tokenEndpoint: getConfig('aafMfa.tokenEndpoint') || '',
+    userInfoEndpoint: getConfig('aafMfa.userInfoEndpoint') || '',
+    clientId: getConfig('aafMfa.clientId') || '',
+    clientSecret: getConfig('aafMfa.clientSecret') || '',
+  };
+}
+
+export function setAafMfaConfig(
+  authorizeEndpoint: string,
+  tokenEndpoint: string,
+  userInfoEndpoint: string,
+  clientId: string,
+  clientSecret: string
+): void {
+  setConfig('aafMfa.authorizeEndpoint', authorizeEndpoint);
+  setConfig('aafMfa.tokenEndpoint', tokenEndpoint);
+  setConfig('aafMfa.userInfoEndpoint', userInfoEndpoint);
+  setConfig('aafMfa.clientId', clientId);
+  setConfig('aafMfa.clientSecret', clientSecret);
+}

@@ -17,6 +17,18 @@ function getStatusBadge(status: string): BadgeVariant {
   return 'neutral';
 }
 
+function getStepUpBadge(stepUpStatus: string): { variant: BadgeVariant; label: string } {
+  switch (stepUpStatus) {
+    case 'completed':
+      return { variant: 'success', label: 'MFA ✓' };
+    case 'pending_mfa':
+      return { variant: 'warning', label: 'Awaiting MFA' };
+    case 'pending_entra':
+    default:
+      return { variant: 'neutral', label: 'Awaiting Entra' };
+  }
+}
+
 const columns: TableColumn<Session>[] = [
   {
     key: 'id',
@@ -59,10 +71,18 @@ const columns: TableColumn<Session>[] = [
   },
   {
     key: 'status',
-    header: 'Status',
+    header: 'Auth Status',
     render: (s) => (
       <Badge variant={getStatusBadge(s.status)} dot>{s.status}</Badge>
     ),
+  },
+  {
+    key: 'step_up_status',
+    header: 'Step-Up',
+    render: (s) => {
+      const { variant, label } = getStepUpBadge(s.step_up_status);
+      return <Badge variant={variant} dot>{label}</Badge>;
+    },
   },
 ];
 
@@ -81,6 +101,10 @@ export default function Sessions() {
   };
 
   useEffect(() => { void load(); }, []);
+
+  const completed = sessions.filter((s) => s.step_up_status === 'completed').length;
+  const pendingMfa = sessions.filter((s) => s.step_up_status === 'pending_mfa').length;
+  const pendingEntra = sessions.filter((s) => s.step_up_status === 'pending_entra').length;
 
   return (
     <div className={styles.page}>
@@ -104,6 +128,14 @@ export default function Sessions() {
           Refresh
         </Button>
       </div>
+
+      {!loading && sessions.length > 0 && (
+        <div className={styles.stepUpSummary}>
+          <Badge variant="success" dot>Step-up complete: {completed}</Badge>
+          <Badge variant="warning" dot>Awaiting MFA: {pendingMfa}</Badge>
+          <Badge variant="neutral" dot>Awaiting Entra: {pendingEntra}</Badge>
+        </div>
+      )}
 
       <Card>
         <Card.Body>
