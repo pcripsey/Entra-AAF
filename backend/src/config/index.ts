@@ -23,4 +23,13 @@ export const config = {
     clientSecret: process.env.AAF_CLIENT_SECRET || '',
     redirectUris: process.env.AAF_REDIRECT_URIS ? process.env.AAF_REDIRECT_URIS.split(',') : [],
   },
+  aafMfa: {
+    // AAF MFA endpoints (bridge acts as OIDC client to AAF's own authorization server)
+    authorizeEndpoint: process.env.AAF_AUTHORIZE_ENDPOINT || '',
+    tokenEndpoint: process.env.AAF_TOKEN_ENDPOINT || '',
+    userInfoEndpoint: process.env.AAF_USERINFO_ENDPOINT || '',
+    // Bridge credentials registered with AAF's authorization server
+    clientId: process.env.AAF_MFA_CLIENT_ID || '',
+    clientSecret: process.env.AAF_MFA_CLIENT_SECRET || '',
+  },
 };

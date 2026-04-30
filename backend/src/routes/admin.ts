@@ -9,6 +9,8 @@ import {
   updateEntraConfigController,
   getAafConfigController,
   updateAafConfigController,
+  getAafMfaConfigController,
+  updateAafMfaConfigController,
   getSessions,
   getAuditLogsController,
   getAttributeMappingsController,
@@ -34,6 +36,8 @@ router.get('/config/entra', requireAuth, getEntraConfigController);
 router.put('/config/entra', requireAuth, updateEntraConfigController);
 router.get('/config/aaf', requireAuth, getAafConfigController);
 router.put('/config/aaf', requireAuth, updateAafConfigController);
+router.get('/config/aaf-mfa', requireAuth, getAafMfaConfigController);
+router.put('/config/aaf-mfa', requireAuth, updateAafMfaConfigController);
 router.get('/sessions', requireAuth, getSessions);
 router.get('/audit-logs', requireAuth, getAuditLogsController);
 router.get('/attribute-mappings', requireAuth, getAttributeMappingsController);

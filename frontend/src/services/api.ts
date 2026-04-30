@@ -37,6 +37,9 @@ export const updateEntraConfig = (config: object) => api.put('/admin/config/entr
 export const getAafConfig = () => api.get('/admin/config/aaf');
 export const updateAafConfig = (config: object) => api.put('/admin/config/aaf', config);
 
+export const getAafMfaConfig = () => api.get('/admin/config/aaf-mfa');
+export const updateAafMfaConfig = (config: object) => api.put('/admin/config/aaf-mfa', config);
+
 export const getSessions = () => api.get('/admin/sessions');
 
 export const getAuditLogs = (page = 1, limit = 20, actions?: string) =>
