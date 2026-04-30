@@ -75,7 +75,7 @@ export async function exchangeAafMfaCode(
     // bridge can cryptographically verify that the MFA code was issued by AAF
     // and has not been replayed.  Without it, anyone who can observe a valid
     // bridgeState value could forge a callback.
-    logger.warn(`AAF MFA: no token endpoint configured; trusting state correlation for bridgeState=${bridgeState}. Set AAF_TOKEN_ENDPOINT for production.`);
+    logger.warn(`AAF MFA: no token endpoint configured; trusting state correlation alone. Set AAF_TOKEN_ENDPOINT for production. [state prefix: ${bridgeState.substring(0, 8)}...]`);
     return true;
   }
 

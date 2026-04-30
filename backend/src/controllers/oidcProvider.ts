@@ -28,8 +28,8 @@ function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: Br
       userClaims['amr'] = session.aaf_mfa_verified
         ? Array.from(new Set([...existing, 'mfa', 'aaf']))
         : existing;
-    } catch {
-      // ignore malformed stored value
+    } catch (err) {
+      logger.warn(`Failed to parse stored AMR claims for session ${session.id}: ${String(err)}`);
     }
   } else if (session.aaf_mfa_verified) {
     userClaims['amr'] = ['mfa', 'aaf'];
