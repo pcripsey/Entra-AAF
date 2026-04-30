@@ -244,3 +244,96 @@ export async function userinfo(req: Request, res: Response, next: NextFunction):
     next(err);
   }
 }
+
+export async function entraLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id_token, aaf_state, nonce } = req.body as Record<string, string>;
+
+    if (!id_token) {
+      createAuditLog('entra_login_failed', null, 'Missing id_token', req.ip || null);
+      res.status(400).json({ error: 'invalid_request', error_description: 'Missing id_token' });
+      return;
+    }
+
+    // Decode the Entra ID token (structural/format validation).
+    // NOTE: For stronger security in production, also verify the JWT signature
+    // against Microsoft's JWKS endpoint (https://login.microsoftonline.com/{tenantId}/discovery/keys).
+    const tokenPayload = decodeIdTokenHint(id_token);
+    if (!tokenPayload) {
+      createAuditLog('entra_login_failed', null, 'Invalid id_token structure', req.ip || null);
+      res.status(400).json({ error: 'invalid_request', error_description: 'Invalid id_token' });
+      return;
+    }
+
+    // Extract user claims from the decoded token
+    const userClaims: Record<string, unknown> = { ...tokenPayload };
+
+    // Extract AMR and ACR from Entra ID token claims
+    const rawAmr = userClaims['amr'];
+    let amrClaims: string[] | null = null;
+    if (Array.isArray(rawAmr)) {
+      amrClaims = (rawAmr as unknown[]).filter((item): item is string => typeof item === 'string');
+      if (amrClaims.length !== rawAmr.length) {
+        logger.warn('entraLogin: non-string AMR values encountered and removed from claims');
+      }
+    }
+    const acrClaims = typeof userClaims['acr'] === 'string' ? (userClaims['acr'] as string) : null;
+
+    // Apply configured attribute mappings
+    const mappings = getAttributeMappings();
+    const mappedClaims: Record<string, unknown> = { ...userClaims };
+    for (const mapping of mappings) {
+      if (userClaims[mapping.source] !== undefined) {
+        mappedClaims[mapping.target] = userClaims[mapping.source];
+      }
+    }
+
+    // Get AAF configuration to determine where to redirect
+    const aafConfig = getAafConfig();
+    const aafClientId = aafConfig.clientId || config.aaf.clientId;
+    const aafRedirectUris = aafConfig.redirectUris.length ? aafConfig.redirectUris : config.aaf.redirectUris;
+
+    if (!aafClientId || aafRedirectUris.length === 0) {
+      createAuditLog('entra_login_failed', null, 'AAF not configured', req.ip || null);
+      res.status(503).json({ error: 'service_unavailable', error_description: 'AAF not configured' });
+      return;
+    }
+
+    const aafRedirectUri = aafRedirectUris[0];
+    const bridgeState = uuidv4();
+    const bridgeNonce = nonce || uuidv4();
+
+    // Create bridge session for this Entra-initiated flow, storing the id_token as the hint
+    createBridgeSession(bridgeState, bridgeNonce, aafRedirectUri, aafClientId, id_token);
+
+    // Persist enriched claims and authentication context into the session
+    updateSessionTokens(bridgeState, { id_token }, mappedClaims, amrClaims, acrClaims);
+
+    // Generate a short-lived authorization code for AAF
+    const authCode = generateAuthCode(bridgeState);
+
+    // Build the redirect URL for AAF
+    const redirectUrl = new URL(aafRedirectUri);
+    redirectUrl.searchParams.set('code', authCode);
+    if (aaf_state) {
+      redirectUrl.searchParams.set('state', aaf_state);
+    }
+
+    const userIdentifier =
+      (mappedClaims['preferred_username'] as string) ||
+      (mappedClaims['upn'] as string) ||
+      (mappedClaims['email'] as string) ||
+      'unknown';
+
+    createAuditLog(
+      'entra_login_success',
+      userIdentifier,
+      `sub: ${String(mappedClaims['sub'] || mappedClaims['oid'])}`,
+      req.ip || null
+    );
+
+    res.json({ redirect_url: redirectUrl.toString() });
+  } catch (err) {
+    next(err);
+  }
+}
