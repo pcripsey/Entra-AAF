@@ -11,6 +11,7 @@ import Sessions from './pages/Sessions';
 import AttributeMapping from './pages/AttributeMapping';
 import AuditLogs from './pages/AuditLogs';
 import BackendLogs from './pages/BackendLogs';
+import EntraRedirect from './pages/EntraRedirect';
 
 function isAuthenticated(): boolean {
   return localStorage.getItem('isAuthenticated') === 'true';
@@ -30,6 +31,7 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/entra-redirect" element={<EntraRedirect />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/config/entra" element={<ProtectedRoute><EntraConfig /></ProtectedRoute>} />
             <Route path="/config/aaf" element={<ProtectedRoute><AAFConfig /></ProtectedRoute>} />
