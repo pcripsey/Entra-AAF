@@ -70,8 +70,12 @@ export async function exchangeAafMfaCode(
   const clientSecret = dbConfig.clientSecret || config.aafMfa.clientSecret;
 
   if (!tokenEndpoint) {
-    // No token endpoint configured — trust state correlation alone
-    logger.info(`AAF MFA: no token endpoint configured; trusting state correlation for bridgeState=${bridgeState}`);
+    // No token endpoint configured — trust state correlation alone.
+    // NOTE: For production deployments, configure AAF_TOKEN_ENDPOINT so the
+    // bridge can cryptographically verify that the MFA code was issued by AAF
+    // and has not been replayed.  Without it, anyone who can observe a valid
+    // bridgeState value could forge a callback.
+    logger.warn(`AAF MFA: no token endpoint configured; trusting state correlation for bridgeState=${bridgeState}. Set AAF_TOKEN_ENDPOINT for production.`);
     return true;
   }
 

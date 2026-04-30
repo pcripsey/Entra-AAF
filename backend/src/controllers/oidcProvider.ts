@@ -5,13 +5,44 @@ import { getJwks } from '../utils/jwks';
 import { createBridgeSession, getBridgeSession } from '../services/sessionService';
 import { generateAuthorizationUrl, exchangeCode, getUserInfo, decodeIdTokenHint } from '../services/oidcClientService';
 import { isAafMfaConfigured, generateAafMfaAuthorizationUrl, exchangeAafMfaCode } from '../services/aafMfaService';
-import { updateSessionTokens, markEntraVerified, markAafMfaVerified, setAafOriginalState } from '../models/session';
+import { updateSessionTokens, markEntraVerified, markAafMfaVerified, setAafOriginalState, BridgeSession } from '../models/session';
 import { getAafConfig, getAttributeMappings } from '../models/config';
 import { generateAuthCode, validateAuthCode, generateIdToken, generateAccessToken, validateAccessToken } from '../services/tokenService';
 import { createAuditLog } from '../models/auditLog';
 import { logger } from '../utils/logger';
 
 type SessionWithState = { aafState?: string; bridgeState?: string };
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Merges stored AMR/ACR claims from a session into the user-claims object and
+ * adds AAF MFA markers when step-up was completed.  Mutates `userClaims`.
+ */
+function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: BridgeSession): void {
+  if (session.amr_claims) {
+    try {
+      const existing = JSON.parse(session.amr_claims) as string[];
+      userClaims['amr'] = session.aaf_mfa_verified
+        ? Array.from(new Set([...existing, 'mfa', 'aaf']))
+        : existing;
+    } catch {
+      // ignore malformed stored value
+    }
+  } else if (session.aaf_mfa_verified) {
+    userClaims['amr'] = ['mfa', 'aaf'];
+  }
+
+  if (session.acr_claims) {
+    userClaims['acr'] = session.acr_claims;
+  }
+
+  if (session.aaf_mfa_verified) {
+    userClaims['aal'] = 'MFA';
+  }
+}
 
 // ---------------------------------------------------------------------------
 // OIDC discovery + JWKS
@@ -150,7 +181,7 @@ export async function callbackEntra(req: Request, res: Response, next: NextFunct
     if (error) {
       logger.error(`Entra callback error: ${error} - ${error_description}`);
       createAuditLog('authentication_failure', null, `Entra error: ${error} – ${error_description || ''}`, req.ip || null);
-      res.status(400).send(`Authentication error: ${error_description || error}`);
+      res.status(400).json({ error: 'authentication_failed', error_description: 'Entra ID authentication failed' });
       return;
     }
 
@@ -284,7 +315,7 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
     if (error) {
       logger.error(`AAF MFA callback error: ${error} - ${error_description}`);
       createAuditLog('aaf_mfa_failure', null, `AAF error: ${error} – ${error_description || ''}`, req.ip || null);
-      res.status(400).send(`AAF MFA error: ${error_description || error}`);
+      res.status(400).json({ error: 'mfa_failed', error_description: 'AAF MFA authentication failed' });
       return;
     }
 
@@ -389,30 +420,8 @@ export async function token(req: Request, res: Response, next: NextFunction): Pr
     const userClaims = JSON.parse(bridgeSession.user_claims) as Record<string, unknown>;
     const sub = (userClaims['sub'] as string) || (userClaims['oid'] as string) || 'unknown';
 
-    // Merge stored AMR/ACR claims and inject step-up authentication context
-    if (bridgeSession.amr_claims) {
-      try {
-        const existingAmr = JSON.parse(bridgeSession.amr_claims) as string[];
-        if (bridgeSession.aaf_mfa_verified) {
-          userClaims['amr'] = Array.from(new Set([...existingAmr, 'mfa', 'aaf']));
-        } else {
-          userClaims['amr'] = existingAmr;
-        }
-      } catch {
-        // ignore malformed stored value
-      }
-    } else if (bridgeSession.aaf_mfa_verified) {
-      userClaims['amr'] = ['mfa', 'aaf'];
-    }
-
-    if (bridgeSession.acr_claims) {
-      userClaims['acr'] = bridgeSession.acr_claims;
-    }
-
-    // Authentication assurance level claim
-    if (bridgeSession.aaf_mfa_verified) {
-      userClaims['aal'] = 'MFA';
-    }
+    // Merge AMR/ACR claims and inject step-up context using the shared helper
+    enrichClaimsWithStepUp(userClaims, bridgeSession);
 
     const idToken = await generateIdToken(userClaims, client_id, bridgeSession.nonce);
     const accessToken = await generateAccessToken(sub, client_id);

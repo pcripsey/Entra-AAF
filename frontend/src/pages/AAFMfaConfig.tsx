@@ -85,7 +85,7 @@ export default function AAFMfaConfig() {
             <FormField
               label="AAF Token Endpoint"
               htmlFor="aaf-mfa-token"
-              hint="AAF's token endpoint for exchanging the MFA authorization code. Optional — if omitted the bridge trusts the callback state alone."
+              hint="AAF's token endpoint for exchanging the MFA authorization code. Strongly recommended for production — when omitted the bridge trusts the callback state alone without verifying the code, which is less secure."
             >
               <Input
                 id="aaf-mfa-token"
