@@ -27,6 +27,7 @@ export interface Session {
   amr_claims: string | null;
   acr_claims: string | null;
   id_token_hint: string | null;
+  requested_claims: string | null;
 }
 
 export interface AuditLog {
