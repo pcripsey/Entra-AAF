@@ -81,7 +81,33 @@ export function jwks(req: Request, res: Response): void {
 
 export async function authorize(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { client_id, redirect_uri, response_type, state, nonce, id_token_hint } = req.query as Record<string, string>;
+    const { client_id, redirect_uri, response_type, state, nonce, id_token_hint, claims } = req.query as Record<string, string>;
+
+    // Extract and sanitize the claims parameter — OSP only supports 'acr'
+    let sanitizedClaims: string | undefined;
+    if (claims) {
+      try {
+        const parsedClaims = JSON.parse(claims) as unknown;
+        if (parsedClaims !== null && typeof parsedClaims === 'object' && !Array.isArray(parsedClaims)) {
+          const claimsObj = parsedClaims as Record<string, unknown>;
+          const idTokenClaims = claimsObj.id_token;
+          if (idTokenClaims !== null && typeof idTokenClaims === 'object' && !Array.isArray(idTokenClaims)) {
+            const idTokenObj = idTokenClaims as Record<string, unknown>;
+            const stripped = Object.keys(idTokenObj).filter(k => k !== 'acr');
+            if (stripped.length > 0) {
+              logger.warn(`authorize: stripping unsupported claims from 'claims' parameter (OSP only supports acr): ${stripped.join(', ')}`);
+            }
+            const { acr } = idTokenObj;
+            if (acr !== undefined) {
+              sanitizedClaims = JSON.stringify({ id_token: { acr } });
+            }
+            // else: no acr present either, drop claims entirely
+          }
+        }
+      } catch {
+        logger.warn('authorize: malformed claims parameter; ignoring');
+      }
+    }
 
     const aafConfig = getAafConfig();
     const aafClientId = aafConfig.clientId || config.aaf.clientId;
@@ -125,7 +151,7 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
     const bridgeState = uuidv4();
     const bridgeNonce = nonce || uuidv4();
 
-    createBridgeSession(bridgeState, bridgeNonce, redirect_uri, client_id, validatedHint);
+    createBridgeSession(bridgeState, bridgeNonce, redirect_uri, client_id, validatedHint, sanitizedClaims);
 
     // Persist the original AAF state in the DB so it survives all cross-domain
     // redirects without relying solely on the Express session cookie.
@@ -312,7 +338,7 @@ export async function loginAaf(req: Request, res: Response, next: NextFunction):
     }
 
     const callbackUri = `${config.baseUrl}/callback/aaf`;
-    const aafMfaUrl = generateAafMfaAuthorizationUrl(bridgeState, callbackUri);
+    const aafMfaUrl = generateAafMfaAuthorizationUrl(bridgeState, callbackUri, bridgeSession.requested_claims);
 
     createAuditLog('aaf_mfa_initiated', null, `bridgeState: ${bridgeState}`, req.ip || null);
 

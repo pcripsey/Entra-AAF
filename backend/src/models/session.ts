@@ -16,6 +16,7 @@ export interface BridgeSession {
   entra_verified: number;
   aaf_mfa_verified: number;
   aaf_original_state: string | null;
+  requested_claims: string | null;
   created_at: string;
   expires_at: string;
 }
@@ -26,7 +27,8 @@ export function createSession(
   expiresAt: Date,
   aafRedirectUri?: string,
   aafClientId?: string,
-  idTokenHint?: string | null
+  idTokenHint?: string | null,
+  requestedClaims?: string | null
 ): BridgeSession {
   const db = getDb();
   const session: BridgeSession = {
@@ -44,13 +46,14 @@ export function createSession(
     entra_verified: 0,
     aaf_mfa_verified: 0,
     aaf_original_state: null,
+    requested_claims: requestedClaims || null,
     created_at: new Date().toISOString(),
     expires_at: expiresAt.toISOString(),
   };
   db.prepare(`
-    INSERT INTO sessions (id, state, nonce, entra_tokens, aaf_auth_code, user_claims, aaf_redirect_uri, aaf_client_id, amr_claims, acr_claims, id_token_hint, entra_verified, aaf_mfa_verified, aaf_original_state, created_at, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(session.id, session.state, session.nonce, null, null, null, session.aaf_redirect_uri, session.aaf_client_id, null, null, session.id_token_hint, 0, 0, null, session.created_at, session.expires_at);
+    INSERT INTO sessions (id, state, nonce, entra_tokens, aaf_auth_code, user_claims, aaf_redirect_uri, aaf_client_id, amr_claims, acr_claims, id_token_hint, entra_verified, aaf_mfa_verified, aaf_original_state, requested_claims, created_at, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(session.id, session.state, session.nonce, null, null, null, session.aaf_redirect_uri, session.aaf_client_id, null, null, session.id_token_hint, 0, 0, null, session.requested_claims, session.created_at, session.expires_at);
   return session;
 }
 
