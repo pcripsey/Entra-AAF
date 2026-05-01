@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { getJwks } from '../utils/jwks';
 import { createBridgeSession, getBridgeSession, getActiveSessions } from '../services/sessionService';
-import { generateAuthorizationUrl, exchangeCode, getUserInfo, decodeIdTokenHint } from '../services/oidcClientService';
+import { generateAuthorizationUrl, exchangeCode, getUserInfo, verifyEntraIdToken } from '../services/oidcClientService';
 import { isAafMfaConfigured, generateAafMfaAuthorizationUrl, exchangeAafMfaCode, getAafMfaUserInfo } from '../services/aafMfaService';
 import { updateSessionTokens, markEntraVerified, markAafMfaVerified, setAafOriginalState, updateSessionNonce, BridgeSession } from '../models/session';
 import { getAafConfig, getAafMfaConfig, getAttributeMappings } from '../models/config';
@@ -143,14 +143,14 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
       return;
     }
 
-    // Validate id_token_hint structure if provided
+    // Cryptographically verify id_token_hint if provided
     let validatedHint: string | null = null;
     if (id_token_hint) {
-      const hintPayload = decodeIdTokenHint(id_token_hint);
-      if (hintPayload) {
+      try {
+        await verifyEntraIdToken(id_token_hint);
         validatedHint = id_token_hint;
-      } else {
-        logger.warn('Received malformed id_token_hint; ignoring');
+      } catch {
+        logger.warn('Received id_token_hint with invalid signature or claims; ignoring');
       }
     }
 
