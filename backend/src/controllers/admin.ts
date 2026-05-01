@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
 import { config } from '../config';
-import { getEntraConfig, setEntraConfig, getAafConfig, setAafConfig, getAttributeMappings, setAttributeMappings, getAafMfaConfig, setAafMfaConfig } from '../models/config';
+import { getEntraConfig, setEntraConfig, getAafConfig, setAafConfig, getAttributeMappings, setAttributeMappings, getAafMfaConfig, setAafMfaConfig, getConfig } from '../models/config';
 import { getAuditLogs, getAuditLogsCount, createAuditLog } from '../models/auditLog';
 import { getActiveSessions } from '../services/sessionService';
 import { isAafMfaConfigured } from '../services/aafMfaService';
@@ -174,12 +174,20 @@ export function updateAttributeMappingsController(req: Request, res: Response): 
 
 export function getAafMfaConfigController(req: Request, res: Response): void {
   const cfg = getAafMfaConfig();
+  const sources = {
+    authorizeEndpoint: getConfig('aafMfa.authorizeEndpoint') ? 'db' : (config.aafMfa.authorizeEndpoint ? 'env' : 'none'),
+    tokenEndpoint: getConfig('aafMfa.tokenEndpoint') ? 'db' : (config.aafMfa.tokenEndpoint ? 'env' : 'none'),
+    userInfoEndpoint: getConfig('aafMfa.userInfoEndpoint') ? 'db' : (config.aafMfa.userInfoEndpoint ? 'env' : 'none'),
+    clientId: getConfig('aafMfa.clientId') ? 'db' : (config.aafMfa.clientId ? 'env' : 'none'),
+    clientSecret: getConfig('aafMfa.clientSecret') ? 'db' : (config.aafMfa.clientSecret ? 'env' : 'none'),
+  };
   res.json({
     authorizeEndpoint: cfg.authorizeEndpoint,
     tokenEndpoint: cfg.tokenEndpoint,
     userInfoEndpoint: cfg.userInfoEndpoint,
     clientId: cfg.clientId,
     clientSecret: cfg.clientSecret ? '***' : '',
+    sources,
   });
 }
 

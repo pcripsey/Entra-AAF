@@ -16,6 +16,7 @@ export default function AAFMfaConfig() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sources, setSources] = useState<Record<string, string>>({});
 
   useEffect(() => {
     getAafMfaConfig().then((res) => {
@@ -25,12 +26,14 @@ export default function AAFMfaConfig() {
         userInfoEndpoint: string;
         clientId: string;
         clientSecret: string;
+        sources?: Record<string, string>;
       };
       setAuthorizeEndpoint(data.authorizeEndpoint);
       setTokenEndpoint(data.tokenEndpoint);
       setUserInfoEndpoint(data.userInfoEndpoint);
       setClientId(data.clientId);
       setClientSecret(data.clientSecret);
+      setSources(data.sources || {});
     }).catch(console.error);
   }, []);
 
@@ -70,7 +73,11 @@ export default function AAFMfaConfig() {
             <FormField
               label="AAF Authorize Endpoint"
               htmlFor="aaf-mfa-authorize"
-              hint="AAF's authorization endpoint URL (e.g. https://aaf.example.com/authorize). Setting this enables the step-up flow."
+              hint={
+                sources.authorizeEndpoint === 'env'
+                  ? 'Loaded from environment variable (AAF_AUTHORIZE_ENDPOINT) — save to override with a database value.'
+                  : "AAF's authorization endpoint URL (e.g. https://aaf.example.com/authorize). Setting this enables the step-up flow."
+              }
             >
               <Input
                 id="aaf-mfa-authorize"
@@ -85,7 +92,11 @@ export default function AAFMfaConfig() {
             <FormField
               label="AAF Token Endpoint"
               htmlFor="aaf-mfa-token"
-              hint="Required for production. Without this, the bridge cannot cryptographically verify MFA completion and relies only on state correlation, which is less secure."
+              hint={
+                sources.tokenEndpoint === 'env'
+                  ? 'Loaded from environment variable (AAF_TOKEN_ENDPOINT) — save to override with a database value.'
+                  : 'Required for production. Without this, the bridge cannot cryptographically verify MFA completion and relies only on state correlation, which is less secure.'
+              }
             >
               <Input
                 id="aaf-mfa-token"
@@ -100,7 +111,11 @@ export default function AAFMfaConfig() {
             <FormField
               label="AAF UserInfo Endpoint"
               htmlFor="aaf-mfa-userinfo"
-              hint="AAF's UserInfo endpoint. Optional."
+              hint={
+                sources.userInfoEndpoint === 'env'
+                  ? 'Loaded from environment variable (AAF_USERINFO_ENDPOINT) — save to override with a database value.'
+                  : "AAF's UserInfo endpoint. Optional."
+              }
             >
               <Input
                 id="aaf-mfa-userinfo"
@@ -115,7 +130,11 @@ export default function AAFMfaConfig() {
             <FormField
               label="Bridge Client ID (at AAF)"
               htmlFor="aaf-mfa-client-id"
-              hint="The client_id registered for this bridge on AAF's authorization server."
+              hint={
+                sources.clientId === 'env'
+                  ? 'Loaded from environment variable (AAF_MFA_CLIENT_ID) — save to override with a database value.'
+                  : "The client_id registered for this bridge on AAF's authorization server."
+              }
             >
               <Input
                 id="aaf-mfa-client-id"
@@ -130,7 +149,11 @@ export default function AAFMfaConfig() {
             <FormField
               label="Bridge Client Secret (at AAF)"
               htmlFor="aaf-mfa-client-secret"
-              hint="Leave blank to keep the existing secret."
+              hint={
+                sources.clientSecret === 'env'
+                  ? 'Loaded from environment variable (AAF_MFA_CLIENT_SECRET) — a value is set. Save to override with a database value.'
+                  : 'Leave blank to keep the existing secret.'
+              }
             >
               <Input
                 id="aaf-mfa-client-secret"
