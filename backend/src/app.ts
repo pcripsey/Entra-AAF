@@ -18,7 +18,17 @@ const app = express();
 
 app.set('trust proxy', 1);
 app.use(helmet());
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({
+  origin: (origin, callback) => {
+    const allowed = config.corsOrigins || [config.baseUrl];
+    if (!origin || allowed.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
 app.use(requestLogger);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
