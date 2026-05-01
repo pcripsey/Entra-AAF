@@ -144,6 +144,7 @@ export function getSessions(req: Request, res: Response): void {
       entra_verified: !!s.entra_verified,
       aaf_mfa_verified: !!s.aaf_mfa_verified,
       step_up_status: stepUpStatus,
+      requested_claims: s.requested_claims,
     };
   });
   res.json(sanitized);
