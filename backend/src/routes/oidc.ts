@@ -23,13 +23,6 @@ const authFlowLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-const entraLoginLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 // OIDC discovery
 router.get('/.well-known/openid-configuration', discovery);
 router.get('/.well-known/jwks.json', jwks);
@@ -52,7 +45,7 @@ router.get('/callback', authFlowLimiter, callback);
 router.post('/token', token);
 router.get('/userinfo', userinfo);
 
-// Legacy implicit-flow endpoint (frontend EntraRedirect page)
-router.post('/entra-login', entraLoginLimiter, entraLogin);
+// Removed implicit-flow bypass endpoint — returns 410 Gone
+router.post('/entra-login', entraLogin);
 
 export default router;

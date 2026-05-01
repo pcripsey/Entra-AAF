@@ -1,6 +1,7 @@
 import { config } from '../config';
 import { getAafMfaConfig } from '../models/config';
 import { logger } from '../utils/logger';
+import { logOutboundRequest } from '../middleware/outboundLogger';
 
 /**
  * Returns true when the AAF MFA step-up flow is configured.
@@ -67,7 +68,7 @@ export async function exchangeAafMfaCode(
   code: string,
   bridgeState: string,
   callbackUri: string
-): Promise<boolean> {
+): Promise<{ verified: boolean; accessToken: string }> {
   const dbConfig = getAafMfaConfig();
   const tokenEndpoint = dbConfig.tokenEndpoint || config.aafMfa.tokenEndpoint;
   const clientId = dbConfig.clientId || config.aafMfa.clientId;
@@ -80,7 +81,7 @@ export async function exchangeAafMfaCode(
     // and has not been replayed.  Without it, anyone who can observe a valid
     // bridgeState value could forge a callback.
     logger.warn(`AAF MFA: no token endpoint configured; trusting state correlation alone. Set AAF_TOKEN_ENDPOINT for production. [state prefix: ${bridgeState.substring(0, 8)}...]`);
-    return true;
+    return { verified: true, accessToken: '' };
   }
 
   try {
@@ -88,26 +89,55 @@ export async function exchangeAafMfaCode(
       grant_type: 'authorization_code',
       code,
       redirect_uri: callbackUri,
-      state: bridgeState,
     });
     if (clientId) body.set('client_id', clientId);
     if (clientSecret) body.set('client_secret', clientSecret);
 
-    const response = await fetch(tokenEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    });
+    const response = await logOutboundRequest('POST', tokenEndpoint, () =>
+      fetch(tokenEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      })
+    );
 
     if (!response.ok) {
       const text = await response.text();
       logger.error(`AAF MFA token exchange failed: ${response.status} ${text}`);
-      return false;
+      return { verified: false, accessToken: '' };
     }
 
-    return true;
+    const data = await response.json() as Record<string, unknown>;
+    const accessToken = typeof data['access_token'] === 'string' ? data['access_token'] : '';
+    return { verified: true, accessToken };
   } catch (err) {
     logger.error(`AAF MFA token exchange error: ${String(err)}`);
-    return false;
+    return { verified: false, accessToken: '' };
+  }
+}
+
+/**
+ * Fetches live user claims from the AAF MFA userinfo endpoint using the
+ * provided Bearer access token. Returns an empty object when no userinfo
+ * endpoint is configured or when the request fails.
+ */
+export async function getAafMfaUserInfo(accessToken: string): Promise<Record<string, unknown>> {
+  const dbConfig = getAafMfaConfig();
+  const userInfoEndpoint = dbConfig.userInfoEndpoint || config.aafMfa.userInfoEndpoint;
+  if (!userInfoEndpoint || !accessToken) return {};
+  try {
+    const response = await logOutboundRequest('GET', userInfoEndpoint, () =>
+      fetch(userInfoEndpoint, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+    );
+    if (!response.ok) {
+      logger.warn(`AAF MFA userinfo failed: ${response.status}`);
+      return {};
+    }
+    return await response.json() as Record<string, unknown>;
+  } catch (err) {
+    logger.warn(`AAF MFA userinfo error: ${String(err)}`);
+    return {};
   }
 }

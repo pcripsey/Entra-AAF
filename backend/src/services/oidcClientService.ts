@@ -73,8 +73,24 @@ export async function exchangeCode(code: string, state: string): Promise<TokenSe
 }
 
 export async function getUserInfo(tokenSet: TokenSet): Promise<Record<string, unknown>> {
-  const claims = tokenSet.claims();
-  return claims as Record<string, unknown>;
+  const client = await getEntraClient();
+  const idTokenClaims = tokenSet.claims() as Record<string, unknown>;
+  if (tokenSet.access_token) {
+    try {
+      const userinfoEndpoint = client.issuer.metadata.userinfo_endpoint as string | undefined;
+      if (userinfoEndpoint) {
+        const userInfoClaims = await logOutboundRequest(
+          'GET',
+          userinfoEndpoint,
+          () => client.userinfo(tokenSet.access_token!) as Promise<Record<string, unknown>>,
+        );
+        return { ...idTokenClaims, ...userInfoClaims };
+      }
+    } catch (err) {
+      logger.warn(`getUserInfo: Entra userinfo call failed, using ID token claims: ${String(err)}`);
+    }
+  }
+  return idTokenClaims;
 }
 
 /**
