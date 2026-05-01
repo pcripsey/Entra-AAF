@@ -1,4 +1,5 @@
 import { getDb } from './database';
+import { config } from '../config';
 
 export function getConfig(key: string): string | null {
   const db = getDb();
@@ -79,11 +80,11 @@ export function getAafMfaConfig(): {
   clientSecret: string;
 } {
   return {
-    authorizeEndpoint: getConfig('aafMfa.authorizeEndpoint') || '',
-    tokenEndpoint: getConfig('aafMfa.tokenEndpoint') || '',
-    userInfoEndpoint: getConfig('aafMfa.userInfoEndpoint') || '',
-    clientId: getConfig('aafMfa.clientId') || '',
-    clientSecret: getConfig('aafMfa.clientSecret') || '',
+    authorizeEndpoint: getConfig('aafMfa.authorizeEndpoint') || config.aafMfa.authorizeEndpoint || '',
+    tokenEndpoint: getConfig('aafMfa.tokenEndpoint') || config.aafMfa.tokenEndpoint || '',
+    userInfoEndpoint: getConfig('aafMfa.userInfoEndpoint') || config.aafMfa.userInfoEndpoint || '',
+    clientId: getConfig('aafMfa.clientId') || config.aafMfa.clientId || '',
+    clientSecret: getConfig('aafMfa.clientSecret') || config.aafMfa.clientSecret || '',
   };
 }
 
