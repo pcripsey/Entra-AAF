@@ -73,6 +73,9 @@ export function initializeDatabase(): void {
   if (!sessionColumns.includes('aaf_original_state')) {
     db.exec('ALTER TABLE sessions ADD COLUMN aaf_original_state TEXT');
   }
+  if (!sessionColumns.includes('requested_claims')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN requested_claims TEXT');
+  }
 
   // Migrate audit_logs table to add DNS columns if they don't exist
   const auditColumns = (db.prepare('PRAGMA table_info(audit_logs)').all() as { name: string }[]).map(c => c.name);

@@ -44,9 +44,38 @@ function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: Br
   }
 }
 
-// ---------------------------------------------------------------------------
-// OIDC discovery + JWKS
-// ---------------------------------------------------------------------------
+/**
+ * Parses and sanitizes the `claims` query parameter for forwarding to OSP.
+ * OSP only supports `acr` inside `id_token`; all other claim names are
+ * stripped and a warning is logged.  Returns the sanitized JSON string, or
+ * `undefined` when the `claims` parameter is absent, malformed, or contains
+ * no supported claims.
+ */
+function sanitizeClaimsParameter(claims: string | undefined): string | undefined {
+  if (!claims) return undefined;
+  try {
+    const parsed = JSON.parse(claims) as unknown;
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      logger.warn('authorize: malformed claims parameter (not a JSON object); ignoring');
+      return undefined;
+    }
+    const claimsObj = parsed as Record<string, unknown>;
+    const idTokenClaims = claimsObj.id_token;
+    if (idTokenClaims === null || typeof idTokenClaims !== 'object' || Array.isArray(idTokenClaims)) {
+      return undefined;
+    }
+    const idTokenObj = idTokenClaims as Record<string, unknown>;
+    const stripped = Object.keys(idTokenObj).filter(k => k !== 'acr');
+    if (stripped.length > 0) {
+      logger.warn(`authorize: stripping unsupported claims from 'claims' parameter (OSP only supports acr): ${stripped.join(', ')}`);
+    }
+    const { acr } = idTokenObj;
+    return acr !== undefined ? JSON.stringify({ id_token: { acr } }) : undefined;
+  } catch (err) {
+    logger.warn(`authorize: malformed claims parameter; ignoring: ${String(err)}`);
+    return undefined;
+  }
+}
 
 export function discovery(req: Request, res: Response): void {
   const baseUrl = config.baseUrl;
@@ -81,7 +110,10 @@ export function jwks(req: Request, res: Response): void {
 
 export async function authorize(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { client_id, redirect_uri, response_type, state, nonce, id_token_hint } = req.query as Record<string, string>;
+    const { client_id, redirect_uri, response_type, state, nonce, id_token_hint, claims } = req.query as Record<string, string>;
+
+    // Extract and sanitize the claims parameter — OSP only supports 'acr'
+    const sanitizedClaims = sanitizeClaimsParameter(claims);
 
     const aafConfig = getAafConfig();
     const aafClientId = aafConfig.clientId || config.aaf.clientId;
@@ -125,7 +157,7 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
     const bridgeState = uuidv4();
     const bridgeNonce = nonce || uuidv4();
 
-    createBridgeSession(bridgeState, bridgeNonce, redirect_uri, client_id, validatedHint);
+    createBridgeSession(bridgeState, bridgeNonce, redirect_uri, client_id, validatedHint, sanitizedClaims);
 
     // Persist the original AAF state in the DB so it survives all cross-domain
     // redirects without relying solely on the Express session cookie.
@@ -312,7 +344,7 @@ export async function loginAaf(req: Request, res: Response, next: NextFunction):
     }
 
     const callbackUri = `${config.baseUrl}/callback/aaf`;
-    const aafMfaUrl = generateAafMfaAuthorizationUrl(bridgeState, callbackUri);
+    const aafMfaUrl = generateAafMfaAuthorizationUrl(bridgeState, callbackUri, bridgeSession.requested_claims);
 
     createAuditLog('aaf_mfa_initiated', null, `bridgeState: ${bridgeState}`, req.ip || null);
 

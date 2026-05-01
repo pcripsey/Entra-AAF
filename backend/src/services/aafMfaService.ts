@@ -28,7 +28,8 @@ export function isAafMfaConfigured(): boolean {
  */
 export function generateAafMfaAuthorizationUrl(
   bridgeState: string,
-  callbackUri: string
+  callbackUri: string,
+  sanitizedClaims?: string | null
 ): string {
   const dbConfig = getAafMfaConfig();
   const authorizeEndpoint =
@@ -47,6 +48,9 @@ export function generateAafMfaAuthorizationUrl(
   url.searchParams.set('redirect_uri', callbackUri);
   url.searchParams.set('state', bridgeState);
   url.searchParams.set('scope', 'openid');
+  if (sanitizedClaims) {
+    url.searchParams.set('claims', sanitizedClaims);
+  }
 
   return url.toString();
 }
