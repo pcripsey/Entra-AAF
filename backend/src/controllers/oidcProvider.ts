@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { getJwks } from '../utils/jwks';
 import { createBridgeSession, getBridgeSession } from '../services/sessionService';
-import { generateAuthorizationUrl, exchangeCode, getUserInfo, decodeIdTokenHint } from '../services/oidcClientService';
+import { generateAuthorizationUrl, exchangeCode, getUserInfo, decodeIdTokenHint, verifyEntraIdToken } from '../services/oidcClientService';
 import { isAafMfaConfigured, generateAafMfaAuthorizationUrl, exchangeAafMfaCode } from '../services/aafMfaService';
 import { updateSessionTokens, markEntraVerified, markAafMfaVerified, setAafOriginalState, BridgeSession } from '../models/session';
 import { getAafConfig, getAttributeMappings } from '../models/config';
@@ -482,13 +482,14 @@ export async function entraLogin(req: Request, res: Response, next: NextFunction
       return;
     }
 
-    // Decode the Entra ID token (structural/format validation).
-    // NOTE: For stronger security in production, also verify the JWT signature
-    // against Microsoft's JWKS endpoint (https://login.microsoftonline.com/{tenantId}/discovery/keys).
-    const tokenPayload = decodeIdTokenHint(id_token);
-    if (!tokenPayload) {
-      createAuditLog('entra_login_failed', null, 'Invalid id_token structure', req.ip || null);
-      res.status(400).json({ error: 'invalid_request', error_description: 'Invalid id_token' });
+    // Verify the Entra ID token signature against Microsoft's JWKS endpoint
+    // and validate standard OIDC claims (iss, aud, exp).
+    let tokenPayload: Record<string, unknown>;
+    try {
+      tokenPayload = await verifyEntraIdToken(id_token);
+    } catch (err) {
+      createAuditLog('entra_login_failed', null, `id_token verification failed: ${String(err)}`, req.ip || null);
+      res.status(401).json({ error: 'invalid_token', error_description: 'id_token verification failed' });
       return;
     }
 

@@ -1,4 +1,5 @@
 import { Issuer, Client, TokenSet } from 'openid-client';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { getEntraConfig } from '../models/config';
 import { config } from '../config';
 import { logger } from '../utils/logger';
@@ -23,7 +24,9 @@ export async function getEntraClient(): Promise<Client> {
   }
 
   logger.info(`Discovering Entra ID OIDC configuration for tenant: ${tenantId}`);
-  const discoveryUrl = `https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`;
+  const discoveryUrl =
+    config.entra.discoveryUrl ||
+    `https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`;
   const issuer = await logOutboundRequest('GET', discoveryUrl, () =>
     Issuer.discover(discoveryUrl),
   );
@@ -72,6 +75,43 @@ export async function exchangeCode(code: string, state: string): Promise<TokenSe
 export async function getUserInfo(tokenSet: TokenSet): Promise<Record<string, unknown>> {
   const claims = tokenSet.claims();
   return claims as Record<string, unknown>;
+}
+
+/**
+ * Verifies an Entra ID token's cryptographic signature against Microsoft's JWKS
+ * endpoint and validates standard OIDC claims (iss, aud, exp).
+ *
+ * The JWKS URI and expected issuer are resolved dynamically via the Entra OIDC
+ * discovery document, using the same cached client as the rest of the service.
+ *
+ * Returns the verified token payload on success, or throws on failure.
+ */
+export async function verifyEntraIdToken(idToken: string): Promise<Record<string, unknown>> {
+  const entraConfig = getEntraConfig();
+  const clientId = entraConfig.clientId || config.entra.clientId;
+
+  // getEntraClient() performs OIDC discovery and caches the result, so calling
+  // it here avoids a redundant discovery round-trip on subsequent requests.
+  const client = await getEntraClient();
+
+  const jwksUri = client.issuer.metadata.jwks_uri as string | undefined;
+  const expectedIssuer = client.issuer.metadata.issuer as string | undefined;
+
+  if (!jwksUri || !expectedIssuer) {
+    throw new Error('Entra ID OIDC discovery did not return required metadata (jwks_uri, issuer)');
+  }
+
+  const JWKS = createRemoteJWKSet(new URL(jwksUri));
+
+  const { payload } = await jwtVerify(idToken, JWKS, {
+    algorithms: ['RS256'],
+    issuer: expectedIssuer,
+    audience: clientId,
+    clockTolerance: 60,
+  });
+
+  logger.debug('Entra ID token signature verified successfully');
+  return payload as Record<string, unknown>;
 }
 
 export function decodeIdTokenHint(hint: string): Record<string, unknown> | null {
