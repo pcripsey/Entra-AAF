@@ -33,6 +33,7 @@ function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: Br
     delete userClaims['amr'];             // incomplete - omit entirely
   }
 
+  // acr is passed through as AAF supports it
   if (session.acr_claims) {
     userClaims['acr'] = session.acr_claims;
   }
@@ -249,6 +250,11 @@ export async function callbackEntra(req: Request, res: Response, next: NextFunct
     const tokenSet = await exchangeCode(code, state);
     const userClaims = await getUserInfo(tokenSet);
 
+    // Extract ACR from Entra ID token claims to persist in the session;
+    // enrichClaimsWithStepUp() reads session.acr_claims for the AAF passthrough.
+    // Entra's internal AMR is not stored — the bridge synthesises its own.
+    const acrClaims = typeof userClaims['acr'] === 'string' ? (userClaims['acr'] as string) : null;
+
     const mappings = getAttributeMappings();
     const mappedClaims: Record<string, unknown> = { ...userClaims };
     for (const mapping of mappings) {
@@ -257,14 +263,14 @@ export async function callbackEntra(req: Request, res: Response, next: NextFunct
       }
     }
 
-    // Strip Entra's internal amr/acr from stored claims — the bridge
+    // Strip Entra's internal amr from stored claims — the bridge
     // synthesises its own amr for AAF via enrichClaimsWithStepUp().
+    // acr is retained in mappedClaims as AAF supports it.
     delete mappedClaims['amr'];
-    delete mappedClaims['acr'];
 
-    // Pass null for amrClaims/acrClaims so Entra's internal values are never
-    // persisted to session.amr_claims or session.acr_claims.
-    updateSessionTokens(state, { access_token: tokenSet.access_token, id_token: tokenSet.id_token }, mappedClaims, null, null);
+    // Do not persist Entra's internal AMR; pass null for amrClaims.
+    // acrClaims is stored so enrichClaimsWithStepUp() can pass it through to AAF.
+    updateSessionTokens(state, { access_token: tokenSet.access_token, id_token: tokenSet.id_token }, mappedClaims, null, acrClaims);
     markEntraVerified(state);
 
     const userIdentifier =
