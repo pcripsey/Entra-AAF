@@ -23,3 +23,14 @@ export function removeBridgeSession(state: string): void {
 export function getActiveSessions(): BridgeSession[] {
   return getAllActiveSessions();
 }
+
+export function getEntraAccessTokenFromSession(state: string): string | null {
+  const session = getBridgeSession(state);
+  if (!session?.entra_tokens) return null;
+  try {
+    const tokens = JSON.parse(session.entra_tokens) as Record<string, unknown>;
+    return typeof tokens['access_token'] === 'string' ? tokens['access_token'] : null;
+  } catch {
+    return null;
+  }
+}
