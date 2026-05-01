@@ -25,10 +25,13 @@ export function isAafMfaConfigured(): boolean {
  *                     the bridge can correlate the callback.
  * @param callbackUri  The bridge's callback URI that AAF will redirect to
  *                     after MFA (e.g. `{BASE_URL}/callback/aaf`).
+ * @param nonce        A per-request nonce for replay protection (OIDC requires
+ *                     this when requesting the openid scope).
  */
 export function generateAafMfaAuthorizationUrl(
   bridgeState: string,
   callbackUri: string,
+  nonce: string,
   sanitizedClaims?: string | null
 ): string {
   const dbConfig = getAafMfaConfig();
@@ -48,6 +51,7 @@ export function generateAafMfaAuthorizationUrl(
   url.searchParams.set('redirect_uri', callbackUri);
   url.searchParams.set('state', bridgeState);
   url.searchParams.set('scope', 'openid');
+  url.searchParams.set('nonce', nonce);
   if (sanitizedClaims) {
     url.searchParams.set('claims', sanitizedClaims);
   }
@@ -88,7 +92,6 @@ export async function exchangeAafMfaCode(
       grant_type: 'authorization_code',
       code,
       redirect_uri: callbackUri,
-      state: bridgeState,
     });
     if (clientId) body.set('client_id', clientId);
     if (clientSecret) body.set('client_secret', clientSecret);
