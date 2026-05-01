@@ -18,21 +18,19 @@ type SessionWithState = { aafState?: string; bridgeState?: string };
 // ---------------------------------------------------------------------------
 
 /**
- * Merges stored AMR/ACR claims from a session into the user-claims object and
- * adds AAF MFA markers when step-up was completed.  Mutates `userClaims`.
+ * Synthesises the bridge's own AMR/ACR claims from session state and writes
+ * them into the user-claims object.  Mutates `userClaims`.
+ *
+ * Entra's internal amr (e.g. ["pwd", "mfa"]) is consumed internally for
+ * step-up logic and must NOT be forwarded to AAF.
  */
 function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: BridgeSession): void {
-  if (session.amr_claims) {
-    try {
-      const existing = JSON.parse(session.amr_claims) as string[];
-      userClaims['amr'] = session.aaf_mfa_verified
-        ? Array.from(new Set([...existing, 'mfa', 'aaf']))
-        : existing;
-    } catch (err) {
-      logger.warn(`Failed to parse stored AMR claims for session ${session.id}: ${String(err)}`);
-    }
-  } else if (session.aaf_mfa_verified) {
-    userClaims['amr'] = ['mfa', 'aaf'];
+  if (session.aaf_mfa_verified) {
+    userClaims['amr'] = ['mfa', 'aaf'];   // step-up completed
+  } else if (session.entra_verified) {
+    userClaims['amr'] = ['pwd'];           // Entra only, no MFA step-up
+  } else {
+    delete userClaims['amr'];             // incomplete - omit entirely
   }
 
   if (session.acr_claims) {
@@ -251,12 +249,6 @@ export async function callbackEntra(req: Request, res: Response, next: NextFunct
     const tokenSet = await exchangeCode(code, state);
     const userClaims = await getUserInfo(tokenSet);
 
-    // Extract AMR and ACR from Entra ID token claims
-    const amrClaims = Array.isArray(userClaims['amr'])
-      ? (userClaims['amr'] as unknown[]).filter((item): item is string => typeof item === 'string')
-      : null;
-    const acrClaims = typeof userClaims['acr'] === 'string' ? (userClaims['acr'] as string) : null;
-
     const mappings = getAttributeMappings();
     const mappedClaims: Record<string, unknown> = { ...userClaims };
     for (const mapping of mappings) {
@@ -265,7 +257,14 @@ export async function callbackEntra(req: Request, res: Response, next: NextFunct
       }
     }
 
-    updateSessionTokens(state, { access_token: tokenSet.access_token, id_token: tokenSet.id_token }, mappedClaims, amrClaims, acrClaims);
+    // Strip Entra's internal amr/acr from stored claims — the bridge
+    // synthesises its own amr for AAF via enrichClaimsWithStepUp().
+    delete mappedClaims['amr'];
+    delete mappedClaims['acr'];
+
+    // Pass null for amrClaims/acrClaims so Entra's internal values are never
+    // persisted to session.amr_claims or session.acr_claims.
+    updateSessionTokens(state, { access_token: tokenSet.access_token, id_token: tokenSet.id_token }, mappedClaims, null, null);
     markEntraVerified(state);
 
     const userIdentifier =
