@@ -5,7 +5,7 @@ import { getJwks } from '../utils/jwks';
 import { createBridgeSession, getBridgeSession } from '../services/sessionService';
 import { generateAuthorizationUrl, exchangeCode, getUserInfo, decodeIdTokenHint, verifyEntraIdToken } from '../services/oidcClientService';
 import { isAafMfaConfigured, generateAafMfaAuthorizationUrl, exchangeAafMfaCode } from '../services/aafMfaService';
-import { updateSessionTokens, markEntraVerified, markAafMfaVerified, setAafOriginalState, BridgeSession } from '../models/session';
+import { updateSessionTokens, markEntraVerified, markAafMfaVerified, setAafOriginalState, updateSessionNonce, BridgeSession } from '../models/session';
 import { getAafConfig, getAttributeMappings } from '../models/config';
 import { generateAuthCode, validateAuthCode, generateIdToken, generateAccessToken, validateAccessToken } from '../services/tokenService';
 import { createAuditLog } from '../models/auditLog';
@@ -99,6 +99,12 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
       return;
     }
 
+    if (!state) {
+      createAuditLog('authorize_rejected', client_id || null, 'Missing state parameter', req.ip || null);
+      res.status(400).json({ error: 'invalid_request', error_description: 'state parameter is required' });
+      return;
+    }
+
     // Validate id_token_hint structure if provided
     let validatedHint: string | null = null;
     if (id_token_hint) {
@@ -158,9 +164,15 @@ export async function loginEntra(req: Request, res: Response, next: NextFunction
     const sess = (req.session as unknown) as SessionWithState;
     sess.bridgeState = bridgeState;
 
+    let nonceToUse = bridgeSession.nonce;
+    if (!nonceToUse) {
+      nonceToUse = uuidv4();
+      updateSessionNonce(bridgeState, nonceToUse);
+    }
+
     const authUrl = await generateAuthorizationUrl(
       bridgeState,
-      bridgeSession.nonce || uuidv4(),
+      nonceToUse,
       bridgeSession.id_token_hint
     );
 
@@ -338,15 +350,19 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
       return;
     }
 
+    if (!code) {
+      createAuditLog('aaf_mfa_failure', null, 'Callback missing code parameter', req.ip || null);
+      res.status(400).send('Missing authorization code');
+      return;
+    }
+
     // Exchange the AAF MFA code to verify completion (if token endpoint configured)
-    if (code) {
-      const callbackUri = `${config.baseUrl}/callback/aaf`;
-      const mfaVerified = await exchangeAafMfaCode(code, bridgeState, callbackUri);
-      if (!mfaVerified) {
-        createAuditLog('aaf_mfa_failure', null, 'AAF MFA code exchange failed', req.ip || null);
-        res.status(400).send('AAF MFA verification failed');
-        return;
-      }
+    const callbackUri = `${config.baseUrl}/callback/aaf`;
+    const mfaVerified = await exchangeAafMfaCode(code, bridgeState, callbackUri);
+    if (!mfaVerified) {
+      createAuditLog('aaf_mfa_failure', null, 'AAF MFA code exchange failed', req.ip || null);
+      res.status(400).send('AAF MFA verification failed');
+      return;
     }
 
     markAafMfaVerified(bridgeState);
@@ -490,6 +506,12 @@ export async function entraLogin(req: Request, res: Response, next: NextFunction
     } catch (err) {
       createAuditLog('entra_login_failed', null, `id_token verification failed: ${String(err)}`, req.ip || null);
       res.status(401).json({ error: 'invalid_token', error_description: 'id_token verification failed' });
+      return;
+    }
+
+    if (nonce && tokenPayload['nonce'] !== nonce) {
+      createAuditLog('entra_login_failed', null, 'nonce mismatch', req.ip || null);
+      res.status(401).json({ error: 'invalid_token', error_description: 'nonce mismatch' });
       return;
     }
 

@@ -98,6 +98,11 @@ export function setAafOriginalState(state: string, aafState: string): void {
   db.prepare('UPDATE sessions SET aaf_original_state = ? WHERE state = ?').run(aafState, state);
 }
 
+export function updateSessionNonce(state: string, nonce: string): void {
+  const db = getDb();
+  db.prepare('UPDATE sessions SET nonce = ? WHERE state = ?').run(nonce, state);
+}
+
 export function deleteSession(state: string): void {
   const db = getDb();
   db.prepare('DELETE FROM sessions WHERE state = ?').run(state);
