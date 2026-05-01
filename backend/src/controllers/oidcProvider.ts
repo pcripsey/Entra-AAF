@@ -6,7 +6,7 @@ import { createBridgeSession, getBridgeSession } from '../services/sessionServic
 import { generateAuthorizationUrl, exchangeCode, getUserInfo, decodeIdTokenHint, verifyEntraIdToken } from '../services/oidcClientService';
 import { isAafMfaConfigured, generateAafMfaAuthorizationUrl, exchangeAafMfaCode } from '../services/aafMfaService';
 import { updateSessionTokens, markEntraVerified, markAafMfaVerified, setAafOriginalState, updateSessionNonce, BridgeSession } from '../models/session';
-import { getAafConfig, getAttributeMappings } from '../models/config';
+import { getAafConfig, getAafMfaConfig, getAttributeMappings } from '../models/config';
 import { generateAuthCode, validateAuthCode, generateIdToken, generateAccessToken, validateAccessToken } from '../services/tokenService';
 import { createAuditLog } from '../models/auditLog';
 import { logger } from '../utils/logger';
@@ -50,11 +50,17 @@ function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: Br
 
 export function discovery(req: Request, res: Response): void {
   const baseUrl = config.baseUrl;
+  const aafMfaConfig = getAafMfaConfig();
+  // The bridge is the JWT issuer and holds the signing keys, so issuer and
+  // jwks_uri always point here. The authorization, token, and userinfo
+  // endpoints advertise the AAF endpoints (when configured) so that Entra
+  // can use them directly. This intentional proxy arrangement means the
+  // issuer does not match those endpoints, which is by design.
   res.json({
     issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/authorize`,
-    token_endpoint: `${baseUrl}/token`,
-    userinfo_endpoint: `${baseUrl}/userinfo`,
+    authorization_endpoint: aafMfaConfig.authorizeEndpoint || `${baseUrl}/authorize`,
+    token_endpoint: aafMfaConfig.tokenEndpoint || `${baseUrl}/token`,
+    userinfo_endpoint: aafMfaConfig.userInfoEndpoint || `${baseUrl}/userinfo`,
     jwks_uri: `${baseUrl}/.well-known/jwks.json`,
     response_types_supported: ['code'],
     subject_types_supported: ['public'],
