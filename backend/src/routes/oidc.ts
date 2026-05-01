@@ -11,7 +11,6 @@ import {
   callbackAaf,
   token,
   userinfo,
-  entraLogin,
 } from '../controllers/oidcProvider';
 
 const router = Router();
@@ -19,13 +18,6 @@ const router = Router();
 const authFlowLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const entraLoginLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -51,8 +43,5 @@ router.get('/callback', authFlowLimiter, callback);
 // Token issuance and user info
 router.post('/token', token);
 router.get('/userinfo', userinfo);
-
-// Legacy implicit-flow endpoint (frontend EntraRedirect page)
-router.post('/entra-login', entraLoginLimiter, entraLogin);
 
 export default router;

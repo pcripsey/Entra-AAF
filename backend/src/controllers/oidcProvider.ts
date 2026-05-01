@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import { TokenSet } from 'openid-client';
 import { config } from '../config';
 import { getJwks } from '../utils/jwks';
-import { createBridgeSession, getBridgeSession } from '../services/sessionService';
-import { generateAuthorizationUrl, exchangeCode, getUserInfo, decodeIdTokenHint, verifyEntraIdToken } from '../services/oidcClientService';
+import { createBridgeSession, getBridgeSession, getBridgeSessionBySub } from '../services/sessionService';
+import { generateAuthorizationUrl, exchangeCode, getUserInfo, decodeIdTokenHint } from '../services/oidcClientService';
 import { isAafMfaConfigured, generateAafMfaAuthorizationUrl, exchangeAafMfaCode } from '../services/aafMfaService';
 import { updateSessionTokens, markEntraVerified, markAafMfaVerified, setAafOriginalState, updateSessionNonce, BridgeSession } from '../models/session';
 import { getAafConfig, getAafMfaConfig, getAttributeMappings } from '../models/config';
@@ -516,6 +517,34 @@ export async function userinfo(req: Request, res: Response, next: NextFunction):
       return;
     }
 
+    const sub = payload['sub'] as string;
+
+    // Look up the bridge session to retrieve the stored Entra tokens so we can
+    // proxy a live call to Entra's userinfo endpoint for fresh claims.
+    const session = getBridgeSessionBySub(sub);
+    if (session && session.entra_tokens) {
+      try {
+        const entraTokens = JSON.parse(session.entra_tokens) as Record<string, unknown>;
+        const entraTokenSet = new TokenSet(entraTokens);
+        const liveClaims = await getUserInfo(entraTokenSet);
+        createAuditLog('userinfo_success', sub, 'Claims fetched from Entra userinfo endpoint', req.ip || null);
+        res.json(liveClaims);
+        return;
+      } catch (err) {
+        // Fall through to stored claims if the live Entra call fails
+        logger.warn(`userinfo: failed to fetch live claims from Entra, falling back to stored claims: ${String(err)}`);
+      }
+    }
+
+    // Fall back to stored user_claims when no session / Entra call unavailable
+    if (session && session.user_claims) {
+      const storedClaims = JSON.parse(session.user_claims) as Record<string, unknown>;
+      createAuditLog('userinfo_success', sub, 'Claims returned from session cache', req.ip || null);
+      res.json(storedClaims);
+      return;
+    }
+
+    createAuditLog('userinfo_success', sub, 'Claims returned from access token', req.ip || null);
     res.json({ sub: payload['sub'], ...payload });
   } catch (err) {
     next(err);
@@ -523,110 +552,14 @@ export async function userinfo(req: Request, res: Response, next: NextFunction):
 }
 
 // ---------------------------------------------------------------------------
-// /entra-login — handles Entra implicit-flow token posted from the frontend
+// /entra-login — removed; this implicit-flow endpoint has been deprecated
 // ---------------------------------------------------------------------------
 
-export async function entraLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
-  try {
-    const { id_token, aaf_state, nonce } = req.body as Record<string, string>;
-
-    if (!id_token) {
-      createAuditLog('entra_login_failed', null, 'Missing id_token', req.ip || null);
-      res.status(400).json({ error: 'invalid_request', error_description: 'Missing id_token' });
-      return;
-    }
-
-    // Verify the Entra ID token signature against Microsoft's JWKS endpoint
-    // and validate standard OIDC claims (iss, aud, exp).
-    let tokenPayload: Record<string, unknown>;
-    try {
-      tokenPayload = await verifyEntraIdToken(id_token);
-    } catch (err) {
-      createAuditLog('entra_login_failed', null, `id_token verification failed: ${String(err)}`, req.ip || null);
-      res.status(401).json({ error: 'invalid_token', error_description: 'id_token verification failed' });
-      return;
-    }
-
-    if (nonce && tokenPayload['nonce'] !== nonce) {
-      createAuditLog('entra_login_failed', null, 'nonce mismatch', req.ip || null);
-      res.status(401).json({ error: 'invalid_token', error_description: 'nonce mismatch' });
-      return;
-    }
-
-    // Extract user claims from the decoded token
-    const userClaims: Record<string, unknown> = { ...tokenPayload };
-
-    // Extract AMR and ACR from Entra ID token claims
-    const rawAmr = userClaims['amr'];
-    let amrClaims: string[] | null = null;
-    if (Array.isArray(rawAmr)) {
-      amrClaims = (rawAmr as unknown[]).filter((item): item is string => typeof item === 'string');
-      if (amrClaims.length !== rawAmr.length) {
-        logger.warn('entraLogin: non-string AMR values encountered and removed from claims');
-      }
-    }
-    const acrClaims = typeof userClaims['acr'] === 'string' ? (userClaims['acr'] as string) : null;
-
-    // Apply configured attribute mappings
-    const mappings = getAttributeMappings();
-    const mappedClaims: Record<string, unknown> = { ...userClaims };
-    for (const mapping of mappings) {
-      if (userClaims[mapping.source] !== undefined) {
-        mappedClaims[mapping.target] = userClaims[mapping.source];
-      }
-    }
-
-    // Get AAF configuration to determine where to redirect
-    const aafConfig = getAafConfig();
-    const aafClientId = aafConfig.clientId || config.aaf.clientId;
-    const aafRedirectUris = aafConfig.redirectUris.length ? aafConfig.redirectUris : config.aaf.redirectUris;
-
-    if (!aafClientId || aafRedirectUris.length === 0) {
-      createAuditLog('entra_login_failed', null, 'AAF not configured', req.ip || null);
-      res.status(503).json({ error: 'service_unavailable', error_description: 'AAF not configured' });
-      return;
-    }
-
-    const aafRedirectUri = aafRedirectUris[0];
-    const bridgeState = uuidv4();
-    const bridgeNonce = nonce || uuidv4();
-
-    // Create bridge session for this Entra-initiated flow, storing the id_token as the hint
-    createBridgeSession(bridgeState, bridgeNonce, aafRedirectUri, aafClientId, id_token);
-
-    if (aaf_state) {
-      setAafOriginalState(bridgeState, aaf_state);
-    }
-
-    // Persist enriched claims and authentication context into the session
-    updateSessionTokens(bridgeState, { id_token }, mappedClaims, amrClaims, acrClaims);
-    markEntraVerified(bridgeState);
-
-    // Generate a short-lived authorization code for AAF
-    const authCode = generateAuthCode(bridgeState);
-
-    // Build the redirect URL for AAF
-    const redirectUrl = new URL(aafRedirectUri);
-    redirectUrl.searchParams.set('code', authCode);
-    if (aaf_state) {
-      redirectUrl.searchParams.set('state', aaf_state);
-    }
-
-    const userIdentifier =
-      (mappedClaims['preferred_username'] as string) ||
-      (mappedClaims['upn'] as string) ||
-      (mappedClaims['email'] as string) ||
-      'unknown';
-
-    createAuditLog(
-      'entra_login_success',
-      userIdentifier,
-      `sub: ${String(mappedClaims['sub'] || mappedClaims['oid'])}`,
-      req.ip || null
-    );
-
-    res.json({ redirect_url: redirectUrl.toString() });
-  } catch (err) {
-    next(err);
-  }
+export function entraLogin(req: Request, res: Response): void {
+  res.status(410).json({
+    error: 'endpoint_removed',
+    error_description:
+      'The /entra-login implicit-flow endpoint has been removed. ' +
+      'Use the standard OIDC authorization code flow: redirect to /authorize.',
+  });
 }

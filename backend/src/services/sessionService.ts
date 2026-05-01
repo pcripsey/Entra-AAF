@@ -1,4 +1,4 @@
-import { createSession, getSession, deleteSession, getAllActiveSessions, BridgeSession } from '../models/session';
+import { createSession, getSession, deleteSession, getAllActiveSessions, getSessionBySub, BridgeSession } from '../models/session';
 
 export function createBridgeSession(
   state: string,
@@ -18,6 +18,10 @@ export function getBridgeSession(state: string): BridgeSession | null {
 
 export function removeBridgeSession(state: string): void {
   deleteSession(state);
+}
+
+export function getBridgeSessionBySub(sub: string): BridgeSession | null {
+  return getSessionBySub(sub);
 }
 
 export function getActiveSessions(): BridgeSession[] {
