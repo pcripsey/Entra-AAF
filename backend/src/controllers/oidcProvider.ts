@@ -6,7 +6,7 @@ import { createBridgeSession, getBridgeSession } from '../services/sessionServic
 import { generateAuthorizationUrl, exchangeCode, getUserInfo, decodeIdTokenHint, verifyEntraIdToken } from '../services/oidcClientService';
 import { isAafMfaConfigured, generateAafMfaAuthorizationUrl, exchangeAafMfaCode } from '../services/aafMfaService';
 import { updateSessionTokens, markEntraVerified, markAafMfaVerified, setAafOriginalState, updateSessionNonce, BridgeSession } from '../models/session';
-import { getAafConfig, getAafMfaConfig, getAttributeMappings } from '../models/config';
+import { getAafConfig, getAttributeMappings } from '../models/config';
 import { generateAuthCode, validateAuthCode, generateIdToken, generateAccessToken, validateAccessToken } from '../services/tokenService';
 import { createAuditLog } from '../models/auditLog';
 import { logger } from '../utils/logger';
@@ -79,17 +79,14 @@ function sanitizeClaimsParameter(claims: string | undefined): string | undefined
 
 export function discovery(req: Request, res: Response): void {
   const baseUrl = config.baseUrl;
-  const aafMfaConfig = getAafMfaConfig();
-  // The bridge is the JWT issuer and holds the signing keys, so issuer and
-  // jwks_uri always point here. The authorization, token, and userinfo
-  // endpoints advertise the AAF endpoints (when configured) so that Entra
-  // can use them directly. This intentional proxy arrangement means the
-  // issuer does not match those endpoints, which is by design.
+  // Always advertise the bridge's own endpoints. The aafMfaConfig.*Endpoint
+  // values are outbound-only (bridge → AAF MFA) and must never appear here;
+  // advertising them would cause AAF to redirect back to itself.
   res.json({
     issuer: baseUrl,
-    authorization_endpoint: aafMfaConfig.authorizeEndpoint || `${baseUrl}/authorize`,
-    token_endpoint: aafMfaConfig.tokenEndpoint || `${baseUrl}/token`,
-    userinfo_endpoint: aafMfaConfig.userInfoEndpoint || `${baseUrl}/userinfo`,
+    authorization_endpoint: `${baseUrl}/authorize`,
+    token_endpoint: `${baseUrl}/token`,
+    userinfo_endpoint: `${baseUrl}/userinfo`,
     jwks_uri: `${baseUrl}/.well-known/jwks.json`,
     response_types_supported: ['code'],
     subject_types_supported: ['public'],
@@ -265,6 +262,11 @@ export async function callbackEntra(req: Request, res: Response, next: NextFunct
       }
     }
 
+    // Ensure auth_time is set; use Entra's value if present, otherwise record now
+    if (!mappedClaims['auth_time']) {
+      mappedClaims['auth_time'] = Math.floor(Date.now() / 1000);
+    }
+
     updateSessionTokens(state, { access_token: tokenSet.access_token, id_token: tokenSet.id_token }, mappedClaims, amrClaims, acrClaims);
     markEntraVerified(state);
 
@@ -344,7 +346,13 @@ export async function loginAaf(req: Request, res: Response, next: NextFunction):
     }
 
     const callbackUri = `${config.baseUrl}/callback/aaf`;
-    const aafMfaUrl = generateAafMfaAuthorizationUrl(bridgeState, callbackUri, bridgeSession.requested_claims);
+    const aafMfaNonce = bridgeSession.nonce;
+    if (!aafMfaNonce) {
+      // This should not happen — session nonce is always set during authorize()
+      // or loginEntra(). Log a warning so the anomaly is visible.
+      logger.warn(`loginAaf: bridgeSession.nonce is missing for state ${bridgeState}`);
+    }
+    const aafMfaUrl = generateAafMfaAuthorizationUrl(bridgeState, callbackUri, aafMfaNonce || uuidv4(), bridgeSession.requested_claims);
 
     createAuditLog('aaf_mfa_initiated', null, `bridgeState: ${bridgeState}`, req.ip || null);
 
@@ -431,7 +439,22 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
 
 export async function token(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { grant_type, code, client_id, client_secret } = req.body as Record<string, string>;
+    const { grant_type, code, redirect_uri } = req.body as Record<string, string>;
+    let client_id = req.body.client_id as string | undefined;
+    let client_secret = req.body.client_secret as string | undefined;
+
+    // Support client_secret_basic (Authorization: Basic base64(client_id:client_secret))
+    if (!client_id || !client_secret) {
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Basic ')) {
+        const decoded = Buffer.from(authHeader.slice(6), 'base64').toString('utf-8');
+        const colonIndex = decoded.indexOf(':');
+        if (colonIndex !== -1) {
+          client_id = decoded.slice(0, colonIndex);
+          client_secret = decoded.slice(colonIndex + 1);
+        }
+      }
+    }
 
     if (grant_type !== 'authorization_code') {
       createAuditLog('token_request_failed', client_id || null, `Unsupported grant_type: ${grant_type}`, req.ip || null);
@@ -460,6 +483,13 @@ export async function token(req: Request, res: Response, next: NextFunction): Pr
     if (!bridgeSession || !bridgeSession.user_claims) {
       createAuditLog('token_request_failed', client_id, 'Session not found or missing claims', req.ip || null);
       res.status(400).json({ error: 'invalid_grant', error_description: 'Session not found or missing claims' });
+      return;
+    }
+
+    // RFC 6749 §4.1.3: validate redirect_uri when present
+    if (redirect_uri && bridgeSession.aaf_redirect_uri && redirect_uri !== bridgeSession.aaf_redirect_uri) {
+      createAuditLog('token_request_failed', client_id, `redirect_uri mismatch: ${redirect_uri}`, req.ip || null);
+      res.status(400).json({ error: 'invalid_grant', error_description: 'redirect_uri mismatch' });
       return;
     }
 
@@ -574,6 +604,11 @@ export async function entraLogin(req: Request, res: Response, next: NextFunction
       if (userClaims[mapping.source] !== undefined) {
         mappedClaims[mapping.target] = userClaims[mapping.source];
       }
+    }
+
+    // Ensure auth_time is set; use the token's value if present, otherwise record now
+    if (!mappedClaims['auth_time']) {
+      mappedClaims['auth_time'] = Math.floor(Date.now() / 1000);
     }
 
     // Get AAF configuration to determine where to redirect

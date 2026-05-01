@@ -30,6 +30,19 @@ export function validateAuthCode(code: string): string | null {
   return entry.sessionState;
 }
 
+// Standard OIDC claims plus AAF/bridge-specific extras that are forwarded to
+// the relying party.  All Entra-proprietary fields (oid, tid, ver, uti, rh,
+// xms_*, wids, aio, …) are intentionally excluded to prevent non-standard
+// claims from confusing AAF/OSP's claim parser.
+const ALLOWED_CLAIMS = new Set([
+  'sub', 'name', 'given_name', 'family_name', 'email', 'email_verified',
+  'preferred_username', 'locale', 'zoneinfo', 'updated_at', 'picture',
+  'website', 'phone_number', 'phone_number_verified', 'address', 'birthdate',
+  'gender', 'profile',
+  // AAF / bridge-specific extras
+  'upn', 'groups', 'roles', 'amr', 'acr', 'aal', 'auth_time', 'nonce',
+]);
+
 export async function generateIdToken(
   claims: Record<string, unknown>,
   clientId: string,
@@ -39,7 +52,13 @@ export async function generateIdToken(
   const now = Math.floor(Date.now() / 1000);
   const sub = (claims['sub'] as string) || (claims['oid'] as string) || 'unknown';
 
-  const payload: Record<string, unknown> = { ...claims };
+  // Only forward allowed OIDC/AAF claims; strip Entra-proprietary fields.
+  const payload: Record<string, unknown> = {};
+  for (const key of Object.keys(claims)) {
+    if (ALLOWED_CLAIMS.has(key)) {
+      payload[key] = claims[key];
+    }
+  }
   if (nonce) {
     payload['nonce'] = nonce;
   }
