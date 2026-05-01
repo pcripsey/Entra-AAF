@@ -51,6 +51,11 @@ function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: Br
 export function discovery(req: Request, res: Response): void {
   const baseUrl = config.baseUrl;
   const aafMfaConfig = getAafMfaConfig();
+  // The bridge is the JWT issuer and holds the signing keys, so issuer and
+  // jwks_uri always point here. The authorization, token, and userinfo
+  // endpoints advertise the AAF endpoints (when configured) so that Entra
+  // can use them directly. This intentional proxy arrangement means the
+  // issuer does not match those endpoints, which is by design.
   res.json({
     issuer: baseUrl,
     authorization_endpoint: aafMfaConfig.authorizeEndpoint || `${baseUrl}/authorize`,
