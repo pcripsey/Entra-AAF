@@ -73,8 +73,32 @@ export async function exchangeCode(code: string, state: string): Promise<TokenSe
 }
 
 export async function getUserInfo(tokenSet: TokenSet): Promise<Record<string, unknown>> {
-  const claims = tokenSet.claims();
-  return claims as Record<string, unknown>;
+  const idTokenClaims = tokenSet.claims() as Record<string, unknown>;
+
+  if (!tokenSet.access_token) {
+    return idTokenClaims;
+  }
+
+  const client = await getEntraClient();
+  const userinfoEndpoint = client.issuer.userinfo_endpoint as string | undefined;
+
+  if (!userinfoEndpoint) {
+    logger.warn('getUserInfo: Entra userinfo_endpoint not found in discovery metadata; returning ID token claims only');
+    return idTokenClaims;
+  }
+
+  try {
+    const userinfo = await logOutboundRequest('GET', userinfoEndpoint, () =>
+      client.userinfo(tokenSet.access_token as string),
+    );
+    // Merge: ID token claims as base, live userinfo response on top for freshness
+    return { ...idTokenClaims, ...(userinfo as Record<string, unknown>) };
+  } catch (err) {
+    logger.warn(
+      `getUserInfo: failed to fetch live claims from Entra userinfo endpoint, falling back to ID token claims: ${String(err)}`,
+    );
+    return idTokenClaims;
+  }
 }
 
 /**

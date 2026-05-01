@@ -117,6 +117,28 @@ export function cleanupExpiredSessions(): number {
   return result.changes;
 }
 
+export function getSessionBySub(sub: string): BridgeSession | null {
+  const db = getDb();
+  const now = new Date().toISOString();
+  // Try matching on the 'sub' claim first; fall back to 'oid' to handle sessions
+  // where the bridge access token was minted using the Entra object ID as subject.
+  const bySubRow = db.prepare(
+    `SELECT * FROM sessions
+     WHERE json_extract(user_claims, '$.sub') = ?
+       AND expires_at > ?
+     ORDER BY created_at DESC LIMIT 1`
+  ).get(sub, now) as BridgeSession | undefined;
+  if (bySubRow) return bySubRow;
+
+  const byOidRow = db.prepare(
+    `SELECT * FROM sessions
+     WHERE json_extract(user_claims, '$.oid') = ?
+       AND expires_at > ?
+     ORDER BY created_at DESC LIMIT 1`
+  ).get(sub, now) as BridgeSession | undefined;
+  return byOidRow || null;
+}
+
 export function getAllActiveSessions(): BridgeSession[] {
   const db = getDb();
   return db.prepare('SELECT * FROM sessions WHERE expires_at > ?').all(new Date().toISOString()) as BridgeSession[];
