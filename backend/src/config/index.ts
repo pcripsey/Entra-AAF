@@ -17,6 +17,7 @@ export const config = {
     clientSecret: process.env.ENTRA_CLIENT_SECRET || '',
     tenantId: process.env.ENTRA_TENANT_ID || '',
     redirectUri: process.env.ENTRA_REDIRECT_URI || '',
+    discoveryUrl: process.env.ENTRA_DISCOVERY_URL || '',
   },
   aaf: {
     clientId: process.env.AAF_CLIENT_ID || '',
