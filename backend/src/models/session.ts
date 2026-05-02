@@ -106,6 +106,12 @@ export function updateSessionNonce(state: string, nonce: string): void {
   db.prepare('UPDATE sessions SET nonce = ? WHERE state = ?').run(nonce, state);
 }
 
+export function updateSessionUserClaims(state: string, userClaims: object): void {
+  const db = getDb();
+  db.prepare('UPDATE sessions SET user_claims = ? WHERE state = ?')
+    .run(JSON.stringify(userClaims), state);
+}
+
 export function deleteSession(state: string): void {
   const db = getDb();
   db.prepare('DELETE FROM sessions WHERE state = ?').run(state);

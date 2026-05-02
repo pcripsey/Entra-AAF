@@ -543,7 +543,8 @@ export async function userinfo(req: Request, res: Response, next: NextFunction):
       if (!s.user_claims) return false;
       try {
         const c = JSON.parse(s.user_claims) as Record<string, unknown>;
-        return (c['sub'] as string) === sub || (c['oid'] as string) === sub;
+        return (typeof c['sub'] === 'string' && c['sub'] === sub) ||
+               (typeof c['oid'] === 'string' && c['oid'] === sub);
       } catch { return false; }
     });
 
