@@ -40,6 +40,9 @@ export const updateAafConfig = (config: object) => api.put('/admin/config/aaf', 
 export const getAafMfaConfig = () => api.get('/admin/config/aaf-mfa');
 export const updateAafMfaConfig = (config: object) => api.put('/admin/config/aaf-mfa', config);
 
+export const getOidcDiscoveryConfig = () => api.get('/admin/config/oidc-discovery');
+export const updateOidcDiscoveryConfig = (config: object) => api.put('/admin/config/oidc-discovery', config);
+
 export const getSessions = () => api.get('/admin/sessions');
 
 export const getAuditLogs = (page = 1, limit = 20, actions?: string) =>

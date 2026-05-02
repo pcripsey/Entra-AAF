@@ -6,7 +6,7 @@ import { createBridgeSession, getBridgeSession, getActiveSessions } from '../ser
 import { generateAuthorizationUrl, exchangeCode, getUserInfo, verifyEntraIdToken } from '../services/oidcClientService';
 import { isAafMfaConfigured, generateAafMfaAuthorizationUrl, exchangeAafMfaCode, getAafMfaUserInfo } from '../services/aafMfaService';
 import { updateSessionTokens, markEntraVerified, markAafMfaVerified, setAafOriginalState, updateSessionNonce, BridgeSession } from '../models/session';
-import { getAafConfig, getAttributeMappings } from '../models/config';
+import { getAafConfig, getAttributeMappings, getScopesSupported, getClaimsSupported } from '../models/config';
 import { generateAuthCode, validateAuthCode, generateIdToken, generateAccessToken, validateAccessToken } from '../services/tokenService';
 import { createAuditLog } from '../models/auditLog';
 import { logger } from '../utils/logger';
@@ -86,9 +86,9 @@ export function discovery(req: Request, res: Response): void {
     response_types_supported: ['code'],
     subject_types_supported: ['public'],
     id_token_signing_alg_values_supported: ['RS256'],
-    scopes_supported: ['openid', 'profile', 'email'],
+    scopes_supported: getScopesSupported(),
     token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic'],
-    claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'name', 'email', 'upn', 'amr', 'acr', 'aal', 'auth_time'],
+    claims_supported: getClaimsSupported(),
   });
 }
 

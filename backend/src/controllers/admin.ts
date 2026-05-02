@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
 import { config } from '../config';
-import { getEntraConfig, setEntraConfig, getAafConfig, setAafConfig, getAttributeMappings, setAttributeMappings, getAafMfaConfig, setAafMfaConfig, getConfig } from '../models/config';
+import { getEntraConfig, setEntraConfig, getAafConfig, setAafConfig, getAttributeMappings, setAttributeMappings, getAafMfaConfig, setAafMfaConfig, getConfig, getScopesSupported, setScopesSupported, getClaimsSupported, setClaimsSupported } from '../models/config';
 import { getAuditLogs, getAuditLogsCount, createAuditLog } from '../models/auditLog';
 import { getActiveSessions } from '../services/sessionService';
 import { isAafMfaConfigured } from '../services/aafMfaService';
@@ -203,6 +203,25 @@ export function updateAafMfaConfigController(req: Request, res: Response): void 
   setAafMfaConfig(authorizeEndpoint, tokenEndpoint, userInfoEndpoint, clientId, clientSecret);
   const sess = (req.session as unknown) as AdminSession;
   createAuditLog('aaf_mfa_config_updated', sess.username || 'admin', null, req.ip || null);
+  res.json({ success: true });
+}
+
+export function getOidcDiscoveryConfigController(req: Request, res: Response): void {
+  res.json({
+    scopesSupported: getScopesSupported(),
+    claimsSupported: getClaimsSupported(),
+  });
+}
+
+export function updateOidcDiscoveryConfigController(req: Request, res: Response): void {
+  const { scopesSupported, claimsSupported } = req.body as {
+    scopesSupported: string[];
+    claimsSupported: string[];
+  };
+  setScopesSupported(scopesSupported);
+  setClaimsSupported(claimsSupported);
+  const sess = (req.session as unknown) as AdminSession;
+  createAuditLog('oidc_discovery_config_updated', sess.username || 'admin', null, req.ip || null);
   res.json({ success: true });
 }
 
