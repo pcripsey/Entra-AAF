@@ -110,7 +110,7 @@ export default function BackendLogs() {
     });
   }, []);
 
-  useEffect(() => { void load(page, logType, date, search); }, [page, logType, date, search, load]);
+  useEffect(() => { void load(page, logType, date, search); }, [page, logType, date, search, debugEnabled, load]);
 
   const handleTypeChange = (type: LogType) => {
     setLogType(type);
@@ -136,10 +136,13 @@ export default function BackendLogs() {
 
   const handleDebugToggle = async () => {
     const newLevel = debugEnabled ? 'info' : 'debug';
-    await setLogLevel(newLevel);
-    setDebugEnabled(!debugEnabled);
-    void load(1, logType, date, search);
-    setPage(1);
+    try {
+      await setLogLevel(newLevel);
+      setDebugEnabled(!debugEnabled);
+      setPage(1);
+    } catch {
+      // If the API call fails, keep the current state
+    }
   };
 
   return (

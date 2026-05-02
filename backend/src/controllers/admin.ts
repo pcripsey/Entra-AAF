@@ -339,7 +339,7 @@ export function getLogLevelController(req: Request, res: Response): void {
 
 export function setLogLevelController(req: Request, res: Response): void {
   const { level } = req.body as { level: string };
-  if (level !== 'info' && level !== 'debug') {
+  if (!level || (level !== 'info' && level !== 'debug')) {
     res.status(400).json({ error: 'level must be "info" or "debug"' });
     return;
   }
