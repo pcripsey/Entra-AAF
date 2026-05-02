@@ -93,7 +93,9 @@ export function discovery(req: Request, res: Response): void {
 }
 
 export function jwks(req: Request, res: Response): void {
-  res.json(getJwks());
+  const jwksPayload = getJwks();
+  logger.debug(`[JWKS] Response: ${JSON.stringify(jwksPayload)}`);
+  res.json(jwksPayload);
 }
 
 // ---------------------------------------------------------------------------

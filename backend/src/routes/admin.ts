@@ -19,6 +19,8 @@ import {
   updateOidcDiscoveryConfigController,
   getSystemInfo,
   getBackendLogsController,
+  getLogLevelController,
+  setLogLevelController,
 } from '../controllers/admin';
 
 const router = Router();
@@ -48,5 +50,7 @@ router.get('/attribute-mappings', requireAuth, getAttributeMappingsController);
 router.put('/attribute-mappings', requireAuth, updateAttributeMappingsController);
 router.get('/system', requireAuth, getSystemInfo);
 router.get('/backend-logs', requireAuth, backendLogsLimiter, getBackendLogsController);
+router.get('/log-level', requireAuth, getLogLevelController);
+router.put('/log-level', requireAuth, setLogLevelController);
 
 export default router;
