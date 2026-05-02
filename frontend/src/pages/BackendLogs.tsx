@@ -104,13 +104,17 @@ export default function BackendLogs() {
   }, []);
 
   useEffect(() => {
-    void getLogLevel().then((res) => {
-      const data = res.data as { level: string };
-      setDebugEnabled(data.level === 'debug');
-    });
+    void getLogLevel()
+      .then((res) => {
+        const data = res.data as { level: string };
+        setDebugEnabled(data.level === 'debug');
+      })
+      .catch(() => {
+        // Keep the default false state if the request fails
+      });
   }, []);
 
-  useEffect(() => { void load(page, logType, date, search); }, [page, logType, date, search, debugEnabled, load]);
+  useEffect(() => { void load(page, logType, date, search); }, [page, logType, date, search, load]);
 
   const handleTypeChange = (type: LogType) => {
     setLogType(type);
