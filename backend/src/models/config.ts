@@ -72,6 +72,41 @@ export function setAttributeMappings(mappings: Array<{ source: string; target: s
   setConfig('attribute.mappings', JSON.stringify(mappings));
 }
 
+const DEFAULT_SCOPES = ['openid', 'profile', 'email'];
+const DEFAULT_CLAIMS = ['sub', 'iss', 'aud', 'exp', 'iat', 'name', 'email', 'upn', 'amr', 'acr', 'aal', 'auth_time'];
+
+export function getScopesSupported(): string[] {
+  const raw = getConfig('oidc.scopesSupported');
+  if (raw) {
+    try {
+      return JSON.parse(raw) as string[];
+    } catch {
+      return DEFAULT_SCOPES;
+    }
+  }
+  return DEFAULT_SCOPES;
+}
+
+export function setScopesSupported(scopes: string[]): void {
+  setConfig('oidc.scopesSupported', JSON.stringify(scopes));
+}
+
+export function getClaimsSupported(): string[] {
+  const raw = getConfig('oidc.claimsSupported');
+  if (raw) {
+    try {
+      return JSON.parse(raw) as string[];
+    } catch {
+      return DEFAULT_CLAIMS;
+    }
+  }
+  return DEFAULT_CLAIMS;
+}
+
+export function setClaimsSupported(claims: string[]): void {
+  setConfig('oidc.claimsSupported', JSON.stringify(claims));
+}
+
 export function getAafMfaConfig(): {
   authorizeEndpoint: string;
   tokenEndpoint: string;

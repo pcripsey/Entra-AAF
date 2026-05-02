@@ -42,3 +42,71 @@
   margin-top: $space-6;
   padding-top: $space-4;
 }
+
+.formGroup {
+  margin-bottom: $space-6;
+}
+
+.groupLabel {
+  display: block;
+  font-size: $font-size-base;
+  font-weight: $font-weight-semibold;
+  color: $text-primary;
+  margin-bottom: $space-1;
+}
+
+.groupHint {
+  font-size: $font-size-sm;
+  color: $text-secondary;
+  margin: 0 0 $space-3;
+
+  code {
+    font-family: $font-mono;
+    font-size: $font-size-xs;
+    background-color: $bg-hover;
+    border: 1px solid $border-color;
+    border-radius: $border-radius-sm;
+    padding: 1px 4px;
+  }
+}
+
+.checkboxGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $space-2 $space-4;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+  cursor: pointer;
+  font-size: $font-size-base;
+  color: $text-primary;
+
+  &:has(input:disabled) {
+    cursor: default;
+    color: $text-secondary;
+  }
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: $color-primary;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.checkboxText {
+  user-select: none;
+}
+
+.requiredBadge {
+  font-size: $font-size-xs;
+  color: $text-muted;
+  font-style: italic;
+}

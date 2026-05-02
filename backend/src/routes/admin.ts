@@ -15,6 +15,8 @@ import {
   getAuditLogsController,
   getAttributeMappingsController,
   updateAttributeMappingsController,
+  getOidcDiscoveryConfigController,
+  updateOidcDiscoveryConfigController,
   getSystemInfo,
   getBackendLogsController,
 } from '../controllers/admin';
@@ -38,6 +40,8 @@ router.get('/config/aaf', requireAuth, getAafConfigController);
 router.put('/config/aaf', requireAuth, updateAafConfigController);
 router.get('/config/aaf-mfa', requireAuth, getAafMfaConfigController);
 router.put('/config/aaf-mfa', requireAuth, updateAafMfaConfigController);
+router.get('/config/oidc-discovery', requireAuth, getOidcDiscoveryConfigController);
+router.put('/config/oidc-discovery', requireAuth, updateOidcDiscoveryConfigController);
 router.get('/sessions', requireAuth, getSessions);
 router.get('/audit-logs', requireAuth, getAuditLogsController);
 router.get('/attribute-mappings', requireAuth, getAttributeMappingsController);
