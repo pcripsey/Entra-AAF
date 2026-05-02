@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import { createHash } from 'crypto';
 import { config } from '../config';
 import { getJwks } from '../utils/jwks';
 import { createBridgeSession, getBridgeSession, getActiveSessions } from '../services/sessionService';
-import { generateAuthorizationUrl, exchangeCode, getUserInfo, verifyEntraIdToken } from '../services/oidcClientService';
+import { generateAuthorizationUrl, exchangeCode, getUserInfo, verifyEntraIdToken, decodeIdTokenHint } from '../services/oidcClientService';
 import { isAafMfaConfigured, generateAafMfaAuthorizationUrl, exchangeAafMfaCode, getAafMfaUserInfo } from '../services/aafMfaService';
 import { updateSessionTokens, markEntraVerified, markAafMfaVerified, setAafOriginalState, updateSessionNonce, BridgeSession } from '../models/session';
 import { getAafConfig, getAttributeMappings, getScopesSupported, getClaimsSupported } from '../models/config';
@@ -104,7 +105,17 @@ export function jwks(req: Request, res: Response): void {
 
 export async function authorize(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { client_id, redirect_uri, response_type, state, nonce, id_token_hint, claims } = req.query as Record<string, string>;
+    const {
+      client_id,
+      redirect_uri,
+      response_type,
+      state,
+      nonce,
+      id_token_hint,
+      claims,
+      code_challenge,
+      code_challenge_method,
+    } = req.query as Record<string, string>;
 
     // Extract and sanitize the claims parameter — OSP only supports 'acr'
     const sanitizedClaims = sanitizeClaimsParameter(claims);
@@ -137,12 +148,23 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
       return;
     }
 
+    // Validate PKCE parameters if provided (RFC 7636)
+    if (code_challenge) {
+      if (code_challenge_method && code_challenge_method !== 'S256' && code_challenge_method !== 'plain') {
+        createAuditLog('authorize_rejected', client_id, `Unsupported code_challenge_method: ${code_challenge_method}`, req.ip || null);
+        res.status(400).json({ error: 'invalid_request', error_description: 'Unsupported code_challenge_method; use S256 or plain' });
+        return;
+      }
+    }
+
     // Cryptographically verify id_token_hint if provided
     let validatedHint: string | null = null;
+    let hintClaims: Record<string, unknown> | null = null;
     if (id_token_hint) {
       try {
         await verifyEntraIdToken(id_token_hint);
         validatedHint = id_token_hint;
+        hintClaims = decodeIdTokenHint(id_token_hint);
       } catch {
         logger.warn('Received id_token_hint with invalid signature or claims; ignoring');
       }
@@ -151,7 +173,18 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
     const bridgeState = uuidv4();
     const bridgeNonce = nonce || uuidv4();
 
-    createBridgeSession(bridgeState, bridgeNonce, redirect_uri, client_id, validatedHint, sanitizedClaims);
+    createBridgeSession(
+      bridgeState,
+      bridgeNonce,
+      redirect_uri,
+      client_id,
+      validatedHint,
+      sanitizedClaims,
+      false,
+      null,
+      code_challenge || null,
+      code_challenge_method || null
+    );
 
     // Persist the original AAF state in the DB so it survives all cross-domain
     // redirects without relying solely on the Express session cookie.
@@ -165,7 +198,45 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
 
     createAuditLog('authorize_request', client_id, `redirect_uri: ${redirect_uri}`, req.ip || null);
 
-    // Begin step-up: send the user to Entra ID for first-factor authentication.
+    // When a cryptographically-verified id_token_hint is present, Entra first-
+    // factor authentication has already been completed by the caller.  Skip the
+    // Entra redirect and proceed directly to AAF MFA (second factor).
+    if (validatedHint && hintClaims) {
+      const mappedClaims: Record<string, unknown> = { ...hintClaims };
+      // Strip Entra's internal amr/acr — bridge synthesises its own
+      delete mappedClaims['amr'];
+      delete mappedClaims['acr'];
+      updateSessionTokens(bridgeState, {}, mappedClaims, null, null);
+      markEntraVerified(bridgeState);
+
+      const userIdentifier =
+        (mappedClaims['preferred_username'] as string) ||
+        (mappedClaims['upn'] as string) ||
+        (mappedClaims['email'] as string) ||
+        'unknown';
+
+      createAuditLog(
+        'entra_auth_via_hint',
+        userIdentifier,
+        `Entra 1FA satisfied by id_token_hint; bridgeState: ${bridgeState}`,
+        req.ip || null
+      );
+
+      if (isAafMfaConfigured()) {
+        res.redirect(`/login/aaf?state=${encodeURIComponent(bridgeState)}`);
+      } else {
+        // No MFA configured — issue auth code directly back to the caller
+        const authCode = generateAuthCode(bridgeState);
+        const redirectUrl = new URL(redirect_uri);
+        redirectUrl.searchParams.set('code', authCode);
+        redirectUrl.searchParams.set('state', state);
+        createAuditLog('authentication_success', userIdentifier, `Hint-only flow complete; bridgeState: ${bridgeState}`, req.ip || null);
+        res.redirect(redirectUrl.toString());
+      }
+      return;
+    }
+
+    // Normal flow: send the user to Entra ID for first-factor authentication.
     res.redirect(`/login/entra?state=${encodeURIComponent(bridgeState)}`);
   } catch (err) {
     next(err);
@@ -423,21 +494,49 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
 
     markAafMfaVerified(bridgeState);
 
-    // Generate the final authorization code for the original AAF OIDC client
-    const authCode = generateAuthCode(bridgeState);
+    // Re-read the session to pick up merged claims written above
+    const finalSession = getBridgeSession(bridgeState) || bridgeSession;
+    const finalClaims = finalSession.user_claims
+      ? JSON.parse(finalSession.user_claims) as Record<string, unknown>
+      : {};
+    enrichClaimsWithStepUp(finalClaims, finalSession);
 
     const sess = (req.session as unknown) as SessionWithState;
-    const aafOriginalState = sess.aafState || bridgeSession.aaf_original_state || bridgeState;
-
+    const originalState = sess.aafState || bridgeSession.aaf_original_state || bridgeState;
     const redirectUri = bridgeSession.aaf_redirect_uri || config.aaf.redirectUris[0];
-    const redirectUrl = new URL(redirectUri);
-    redirectUrl.searchParams.set('code', authCode);
-    redirectUrl.searchParams.set('state', aafOriginalState);
 
     createAuditLog('aaf_mfa_success', null, `bridgeState: ${bridgeState}`, req.ip || null);
     createAuditLog('authentication_success', null, `Step-up complete for bridgeState: ${bridgeState}`, req.ip || null);
 
-    res.redirect(redirectUrl.toString());
+    if (bridgeSession.is_entra_initiated) {
+      // -----------------------------------------------------------------------
+      // Entra EAM flow — Entra is waiting for an id_token proving the external
+      // MFA was completed.  Issue the id_token directly and redirect back to
+      // Entra's callback URI (aaf_redirect_uri) so it can continue token issuance.
+      // -----------------------------------------------------------------------
+      const clientId = bridgeSession.aaf_client_id || config.entra.clientId;
+      const idToken = await generateIdToken(finalClaims, clientId, bridgeSession.nonce);
+
+      const entraCallbackUrl = new URL(redirectUri);
+      entraCallbackUrl.searchParams.set('id_token', idToken);
+      if (originalState) {
+        entraCallbackUrl.searchParams.set('state', originalState);
+      }
+
+      res.redirect(entraCallbackUrl.toString());
+    } else {
+      // -----------------------------------------------------------------------
+      // Standard AAF-as-initiator flow — issue an authorization code that AAF
+      // will exchange at /token.
+      // -----------------------------------------------------------------------
+      const authCode = generateAuthCode(bridgeState);
+
+      const redirectUrl = new URL(redirectUri);
+      redirectUrl.searchParams.set('code', authCode);
+      redirectUrl.searchParams.set('state', originalState);
+
+      res.redirect(redirectUrl.toString());
+    }
   } catch (err) {
     next(err);
   }
@@ -449,7 +548,7 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
 
 export async function token(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { grant_type, code, client_id, client_secret } = req.body as Record<string, string>;
+    const { grant_type, code, client_id, client_secret, code_verifier } = req.body as Record<string, string>;
 
     if (grant_type !== 'authorization_code') {
       createAuditLog('token_request_failed', client_id || null, `Unsupported grant_type: ${grant_type}`, req.ip || null);
@@ -479,6 +578,31 @@ export async function token(req: Request, res: Response, next: NextFunction): Pr
       createAuditLog('token_request_failed', client_id, 'Session not found or missing claims', req.ip || null);
       res.status(400).json({ error: 'invalid_grant', error_description: 'Session not found or missing claims' });
       return;
+    }
+
+    // PKCE validation (RFC 7636): if the authorization request included a
+    // code_challenge the token request must supply the matching code_verifier.
+    if (bridgeSession.code_challenge) {
+      if (!code_verifier) {
+        createAuditLog('token_request_failed', client_id, 'PKCE code_verifier missing', req.ip || null);
+        res.status(400).json({ error: 'invalid_grant', error_description: 'code_verifier is required' });
+        return;
+      }
+      const method = bridgeSession.code_challenge_method || 'S256';
+      let computedChallenge: string;
+      if (method === 'S256') {
+        computedChallenge = createHash('sha256')
+          .update(code_verifier)
+          .digest('base64url');
+      } else {
+        // plain
+        computedChallenge = code_verifier;
+      }
+      if (computedChallenge !== bridgeSession.code_challenge) {
+        createAuditLog('token_request_failed', client_id, 'PKCE code_verifier mismatch', req.ip || null);
+        res.status(400).json({ error: 'invalid_grant', error_description: 'code_verifier does not match code_challenge' });
+        return;
+      }
     }
 
     // When step-up is configured, both factors must be verified before tokens

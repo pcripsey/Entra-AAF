@@ -17,6 +17,10 @@ export interface BridgeSession {
   aaf_mfa_verified: number;
   aaf_original_state: string | null;
   requested_claims: string | null;
+  is_entra_initiated: number;
+  entra_transaction_id: string | null;
+  code_challenge: string | null;
+  code_challenge_method: string | null;
   created_at: string;
   expires_at: string;
 }
@@ -28,7 +32,11 @@ export function createSession(
   aafRedirectUri?: string,
   aafClientId?: string,
   idTokenHint?: string | null,
-  requestedClaims?: string | null
+  requestedClaims?: string | null,
+  isEntraInitiated?: boolean,
+  entraTransactionId?: string | null,
+  codeChallenge?: string | null,
+  codeChallengeMethod?: string | null
 ): BridgeSession {
   const db = getDb();
   const session: BridgeSession = {
@@ -47,13 +55,17 @@ export function createSession(
     aaf_mfa_verified: 0,
     aaf_original_state: null,
     requested_claims: requestedClaims || null,
+    is_entra_initiated: isEntraInitiated ? 1 : 0,
+    entra_transaction_id: entraTransactionId || null,
+    code_challenge: codeChallenge || null,
+    code_challenge_method: codeChallengeMethod || null,
     created_at: new Date().toISOString(),
     expires_at: expiresAt.toISOString(),
   };
   db.prepare(`
-    INSERT INTO sessions (id, state, nonce, entra_tokens, aaf_auth_code, user_claims, aaf_redirect_uri, aaf_client_id, amr_claims, acr_claims, id_token_hint, entra_verified, aaf_mfa_verified, aaf_original_state, requested_claims, created_at, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(session.id, session.state, session.nonce, null, null, null, session.aaf_redirect_uri, session.aaf_client_id, null, null, session.id_token_hint, 0, 0, null, session.requested_claims, session.created_at, session.expires_at);
+    INSERT INTO sessions (id, state, nonce, entra_tokens, aaf_auth_code, user_claims, aaf_redirect_uri, aaf_client_id, amr_claims, acr_claims, id_token_hint, entra_verified, aaf_mfa_verified, aaf_original_state, requested_claims, is_entra_initiated, entra_transaction_id, code_challenge, code_challenge_method, created_at, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(session.id, session.state, session.nonce, null, null, null, session.aaf_redirect_uri, session.aaf_client_id, null, null, session.id_token_hint, 0, 0, null, session.requested_claims, session.is_entra_initiated, session.entra_transaction_id, session.code_challenge, session.code_challenge_method, session.created_at, session.expires_at);
   return session;
 }
 
@@ -104,6 +116,16 @@ export function setAafOriginalState(state: string, aafState: string): void {
 export function updateSessionNonce(state: string, nonce: string): void {
   const db = getDb();
   db.prepare('UPDATE sessions SET nonce = ? WHERE state = ?').run(nonce, state);
+}
+
+export function markEntraInitiated(state: string, transactionId?: string | null): void {
+  const db = getDb();
+  db.prepare('UPDATE sessions SET is_entra_initiated = 1, entra_transaction_id = ? WHERE state = ?').run(transactionId || null, state);
+}
+
+export function setSessionPkce(state: string, codeChallenge: string, codeChallengeMethod: string): void {
+  const db = getDb();
+  db.prepare('UPDATE sessions SET code_challenge = ?, code_challenge_method = ? WHERE state = ?').run(codeChallenge, codeChallengeMethod, state);
 }
 
 export function deleteSession(state: string): void {

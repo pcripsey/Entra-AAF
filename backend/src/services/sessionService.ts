@@ -1,4 +1,4 @@
-import { createSession, getSession, deleteSession, getAllActiveSessions, BridgeSession } from '../models/session';
+import { createSession, getSession, deleteSession, getAllActiveSessions, BridgeSession, markEntraInitiated, setSessionPkce } from '../models/session';
 
 export function createBridgeSession(
   state: string,
@@ -6,10 +6,14 @@ export function createBridgeSession(
   aafRedirectUri: string,
   aafClientId: string,
   idTokenHint?: string | null,
-  requestedClaims?: string | null
+  requestedClaims?: string | null,
+  isEntraInitiated?: boolean,
+  entraTransactionId?: string | null,
+  codeChallenge?: string | null,
+  codeChallengeMethod?: string | null
 ): BridgeSession {
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-  return createSession(state, nonce, expiresAt, aafRedirectUri, aafClientId, idTokenHint, requestedClaims);
+  return createSession(state, nonce, expiresAt, aafRedirectUri, aafClientId, idTokenHint, requestedClaims, isEntraInitiated, entraTransactionId, codeChallenge, codeChallengeMethod);
 }
 
 export function getBridgeSession(state: string): BridgeSession | null {
@@ -22,6 +26,14 @@ export function removeBridgeSession(state: string): void {
 
 export function getActiveSessions(): BridgeSession[] {
   return getAllActiveSessions();
+}
+
+export function markBridgeSessionEntraInitiated(state: string, transactionId?: string | null): void {
+  markEntraInitiated(state, transactionId);
+}
+
+export function setBridgeSessionPkce(state: string, codeChallenge: string, codeChallengeMethod: string): void {
+  setSessionPkce(state, codeChallenge, codeChallengeMethod);
 }
 
 export function getEntraAccessTokenFromSession(state: string): string | null {

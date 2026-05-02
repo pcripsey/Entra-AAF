@@ -14,6 +14,24 @@ services:
       - COOKIE_SECURE=${COOKIE_SECURE:-false}
       - DB_PATH=/data/bridge.db
       - CORS_ORIGINS=${CORS_ORIGINS}
+      # Entra ID (Microsoft)
+      - ENTRA_TENANT_ID=${ENTRA_TENANT_ID}
+      - ENTRA_CLIENT_ID=${ENTRA_CLIENT_ID}
+      - ENTRA_CLIENT_SECRET=${ENTRA_CLIENT_SECRET}
+      - ENTRA_REDIRECT_URI=${ENTRA_REDIRECT_URI}
+      - ENTRA_DISCOVERY_URL=${ENTRA_DISCOVERY_URL}
+      # OpenText AAF — OIDC client credentials (AAF calls this bridge)
+      - AAF_CLIENT_ID=${AAF_CLIENT_ID}
+      - AAF_CLIENT_SECRET=${AAF_CLIENT_SECRET}
+      - AAF_REDIRECT_URIS=${AAF_REDIRECT_URIS}
+      # OpenText AAF MFA — step-up second factor (bridge calls AAF)
+      - AAF_AUTHORIZE_ENDPOINT=${AAF_AUTHORIZE_ENDPOINT}
+      - AAF_TOKEN_ENDPOINT=${AAF_TOKEN_ENDPOINT}
+      - AAF_USERINFO_ENDPOINT=${AAF_USERINFO_ENDPOINT}
+      - AAF_MFA_CLIENT_ID=${AAF_MFA_CLIENT_ID}
+      - AAF_MFA_CLIENT_SECRET=${AAF_MFA_CLIENT_SECRET}
+      # Entra EAM (External Authentication Method) — optional allow-list
+      - ENTRA_EAM_ALLOWED_REDIRECT_URIS=${ENTRA_EAM_ALLOWED_REDIRECT_URIS}
     volumes:
       - backend-data:/data
       - backend-keys:/app/keys

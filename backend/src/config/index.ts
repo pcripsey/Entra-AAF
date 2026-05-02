@@ -34,4 +34,12 @@ export const config = {
     clientId: process.env.AAF_MFA_CLIENT_ID || '',
     clientSecret: process.env.AAF_MFA_CLIENT_SECRET || '',
   },
+  entraEam: {
+    // Allowed Entra redirect URIs for the EAM (External Authentication Method) flow.
+    // Comma-separated list of URIs that Entra may supply as redirect_uri.
+    // Defaults to allowing any login.microsoftonline.com or login.microsoft.com origin.
+    allowedRedirectUris: process.env.ENTRA_EAM_ALLOWED_REDIRECT_URIS
+      ? process.env.ENTRA_EAM_ALLOWED_REDIRECT_URIS.split(',').map((s) => s.trim())
+      : [],
+  },
 };
