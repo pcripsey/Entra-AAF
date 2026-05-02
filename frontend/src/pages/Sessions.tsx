@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getSessions } from '../services/api';
 import { Session } from '../types';
 import Card from '../components/common/Card';
@@ -9,6 +9,9 @@ import Table from '../components/table/Table';
 import { TableColumn } from '../components/table/Table';
 import { format } from 'date-fns';
 import styles from './Sessions.module.scss';
+
+const FAST_POLL_MS = 4000;
+const IDLE_POLL_MS = 30000;
 
 function getStatusBadge(status: string): BadgeVariant {
   if (status === 'authenticated') return 'success';
@@ -29,7 +32,41 @@ function getStepUpBadge(stepUpStatus: string): { variant: BadgeVariant; label: s
   }
 }
 
-const columns: TableColumn<Session>[] = [
+function formatElapsed(createdAt: string): string {
+  const elapsedMs = Date.now() - new Date(createdAt).getTime();
+  const totalSec = Math.max(0, Math.floor(elapsedMs / 1000));
+  const minutes = Math.floor(totalSec / 60);
+  const seconds = totalSec % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
+function parseRequestedClaimsAcr(raw: string | null): string {
+  if (!raw) return '—';
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const idToken = parsed['id_token'] as Record<string, unknown> | undefined;
+    if (idToken) {
+      const acr = idToken['acr'] as Record<string, unknown> | string | undefined;
+      if (typeof acr === 'string') return acr;
+      if (acr && typeof acr === 'object') {
+        const val = (acr as Record<string, unknown>)['value'];
+        if (typeof val === 'string') return val;
+      }
+    }
+  } catch {
+    // fall through
+  }
+  return '—';
+}
+
+function ElapsedCell({ createdAt, tick }: { createdAt: string; tick: number }) {
+  // tick is a counter from the parent that increments every second — drives re-render
+  void tick;
+  return <span className={styles.elapsed}>{formatElapsed(createdAt)}</span>;
+}
+
+function buildColumns(tick: number): TableColumn<Session>[] {
+  return [
   {
     key: 'id',
     header: 'Session ID',
@@ -81,14 +118,33 @@ const columns: TableColumn<Session>[] = [
     header: 'Step-Up',
     render: (s) => {
       const { variant, label } = getStepUpBadge(s.step_up_status);
-      return <Badge variant={variant} dot>{label}</Badge>;
+      const isPending = s.step_up_status === 'pending_entra' || s.step_up_status === 'pending_mfa';
+      return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+          <Badge variant={variant} dot>{label}</Badge>
+          {isPending && <ElapsedCell createdAt={s.created_at} tick={tick} />}
+        </span>
+      );
     },
   },
-];
+  {
+    key: 'requested_claims',
+    header: 'Requested Claims',
+    render: (s) => parseRequestedClaimsAcr(s.requested_claims ?? null),
+  },
+  ];
+}
 
 export default function Sessions() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const loadRef = useRef<() => Promise<void>>();
+
+  const hasPending = sessions.some(
+    (s) => s.step_up_status === 'pending_entra' || s.step_up_status === 'pending_mfa',
+  );
 
   const load = async () => {
     setLoading(true);
@@ -100,7 +156,38 @@ export default function Sessions() {
     }
   };
 
+  // Keep ref up-to-date so interval always calls the latest load
+  loadRef.current = load;
+
+  // Bootstrap on mount
   useEffect(() => { void load(); }, []);
+
+  // Single 1-second tick for elapsed timers — only active when pending sessions exist
+  useEffect(() => {
+    if (!hasPending) return;
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [hasPending]);
+
+  // Live polling — reschedule whenever hasPending changes
+  useEffect(() => {
+    const interval = hasPending ? FAST_POLL_MS : IDLE_POLL_MS;
+
+    if (intervalRef.current !== null) {
+      clearInterval(intervalRef.current);
+    }
+
+    intervalRef.current = setInterval(() => { void loadRef.current?.(); }, interval);
+
+    return () => {
+      if (intervalRef.current !== null) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [hasPending]);
+
+  const columns = buildColumns(tick);
 
   const completed = sessions.filter((s) => s.step_up_status === 'completed').length;
   const pendingMfa = sessions.filter((s) => s.step_up_status === 'pending_mfa').length;
@@ -109,11 +196,14 @@ export default function Sessions() {
   return (
     <div className={styles.page}>
       <div className={styles.pageHeader}>
-        <div>
-          <h1 className={styles.pageTitle}>Active Sessions</h1>
-          <p className={styles.pageSubtitle}>
-            {loading ? 'Loading…' : `${sessions.length} session${sessions.length !== 1 ? 's' : ''} found`}
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div>
+            <h1 className={styles.pageTitle}>Active Sessions</h1>
+            <p className={styles.pageSubtitle}>
+              {loading ? 'Loading…' : `${sessions.length} session${sessions.length !== 1 ? 's' : ''} found`}
+            </p>
+          </div>
+          {hasPending && <span className={styles.liveBadge} title="Live — polling every 4s" />}
         </div>
         <Button
           variant="secondary"

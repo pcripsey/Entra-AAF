@@ -40,3 +40,25 @@
   gap: $space-3;
   flex-wrap: wrap;
 }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.4); }
+}
+
+.liveBadge {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #22c55e;
+  animation: pulse 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.elapsed {
+  font-size: $font-size-sm;
+  color: $text-secondary;
+  white-space: nowrap;
+}

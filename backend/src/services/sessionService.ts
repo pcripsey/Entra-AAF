@@ -35,9 +35,7 @@ export function getEntraAccessTokenFromSession(state: string): string | null {
   try {
     const tokens = JSON.parse(session.entra_tokens) as Record<string, unknown>;
     return typeof tokens['access_token'] === 'string' ? tokens['access_token'] : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 /**

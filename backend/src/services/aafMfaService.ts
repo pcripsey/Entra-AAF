@@ -58,11 +58,11 @@ export function generateAafMfaAuthorizationUrl(
 
 /**
  * Exchanges the AAF MFA authorization code for tokens in order to verify
- * that MFA was actually completed.  Returns `true` when the exchange
- * succeeds, `false` otherwise.
+ * that MFA was actually completed.  Returns `{ verified: true, accessToken }`
+ * when the exchange succeeds, `{ verified: false, accessToken: '' }` otherwise.
  *
  * If no AAF token endpoint is configured the bridge trusts the callback
- * state correlation alone and returns `true`.
+ * state correlation alone and returns `{ verified: true, accessToken: '' }`.
  */
 export async function exchangeAafMfaCode(
   code: string,
@@ -117,24 +117,28 @@ export async function exchangeAafMfaCode(
 }
 
 /**
- * Fetches live user claims from the AAF MFA userinfo endpoint using the
- * provided Bearer access token. Returns an empty object when no userinfo
- * endpoint is configured or when the request fails.
+ * Fetches additional user claims from the AAF MFA userinfo endpoint using the
+ * access token obtained during the MFA code exchange.  Returns an empty object
+ * on any failure so callers can proceed without crashing.
  */
 export async function getAafMfaUserInfo(accessToken: string): Promise<Record<string, unknown>> {
   const dbConfig = getAafMfaConfig();
   const userInfoEndpoint = dbConfig.userInfoEndpoint || config.aafMfa.userInfoEndpoint;
+
   if (!userInfoEndpoint || !accessToken) return {};
+
   try {
     const response = await logOutboundRequest('GET', userInfoEndpoint, () =>
       fetch(userInfoEndpoint, {
         headers: { Authorization: `Bearer ${accessToken}` },
       })
     );
+
     if (!response.ok) {
       logger.warn(`AAF MFA userinfo failed: ${response.status}`);
       return {};
     }
+
     return await response.json() as Record<string, unknown>;
   } catch (err) {
     logger.warn(`AAF MFA userinfo error: ${String(err)}`);

@@ -15,8 +15,12 @@ import {
   getAuditLogsController,
   getAttributeMappingsController,
   updateAttributeMappingsController,
+  getOidcDiscoveryConfigController,
+  updateOidcDiscoveryConfigController,
   getSystemInfo,
   getBackendLogsController,
+  getLogLevelController,
+  setLogLevelController,
 } from '../controllers/admin';
 
 const router = Router();
@@ -38,11 +42,15 @@ router.get('/config/aaf', requireAuth, getAafConfigController);
 router.put('/config/aaf', requireAuth, updateAafConfigController);
 router.get('/config/aaf-mfa', requireAuth, getAafMfaConfigController);
 router.put('/config/aaf-mfa', requireAuth, updateAafMfaConfigController);
+router.get('/config/oidc-discovery', requireAuth, getOidcDiscoveryConfigController);
+router.put('/config/oidc-discovery', requireAuth, updateOidcDiscoveryConfigController);
 router.get('/sessions', requireAuth, getSessions);
 router.get('/audit-logs', requireAuth, getAuditLogsController);
 router.get('/attribute-mappings', requireAuth, getAttributeMappingsController);
 router.put('/attribute-mappings', requireAuth, updateAttributeMappingsController);
 router.get('/system', requireAuth, getSystemInfo);
 router.get('/backend-logs', requireAuth, backendLogsLimiter, getBackendLogsController);
+router.get('/log-level', requireAuth, getLogLevelController);
+router.put('/log-level', requireAuth, setLogLevelController);
 
 export default router;

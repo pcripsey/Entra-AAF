@@ -2,11 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { getJwks } from '../utils/jwks';
-import { createBridgeSession, getBridgeSession, getActiveSessions, mergeSessionUserClaims } from '../services/sessionService';
-import { generateAuthorizationUrl, exchangeCode, getUserInfo, decodeIdTokenHint } from '../services/oidcClientService';
+import { createBridgeSession, getBridgeSession, getActiveSessions } from '../services/sessionService';
+import { generateAuthorizationUrl, exchangeCode, getUserInfo, verifyEntraIdToken } from '../services/oidcClientService';
 import { isAafMfaConfigured, generateAafMfaAuthorizationUrl, exchangeAafMfaCode, getAafMfaUserInfo } from '../services/aafMfaService';
 import { updateSessionTokens, markEntraVerified, markAafMfaVerified, setAafOriginalState, updateSessionNonce, BridgeSession } from '../models/session';
-import { getAafConfig, getAafMfaConfig, getAttributeMappings } from '../models/config';
+import { getAafConfig, getAttributeMappings, getScopesSupported, getClaimsSupported } from '../models/config';
 import { generateAuthCode, validateAuthCode, generateIdToken, generateAccessToken, validateAccessToken } from '../services/tokenService';
 import { createAuditLog } from '../models/auditLog';
 import { logger } from '../utils/logger';
@@ -18,21 +18,19 @@ type SessionWithState = { aafState?: string; bridgeState?: string };
 // ---------------------------------------------------------------------------
 
 /**
- * Merges stored AMR/ACR claims from a session into the user-claims object and
- * adds AAF MFA markers when step-up was completed.  Mutates `userClaims`.
+ * Synthesises the bridge's own AMR/ACR claims from session state and writes
+ * them into the user-claims object.  Mutates `userClaims`.
+ *
+ * Entra's internal amr (e.g. ["pwd", "mfa"]) is consumed internally for
+ * step-up logic and must NOT be forwarded to AAF.
  */
 function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: BridgeSession): void {
-  if (session.amr_claims) {
-    try {
-      const existing = JSON.parse(session.amr_claims) as string[];
-      userClaims['amr'] = session.aaf_mfa_verified
-        ? Array.from(new Set([...existing, 'mfa', 'aaf']))
-        : existing;
-    } catch (err) {
-      logger.warn(`Failed to parse stored AMR claims for session ${session.id}: ${String(err)}`);
-    }
-  } else if (session.aaf_mfa_verified) {
-    userClaims['amr'] = ['mfa', 'aaf'];
+  if (session.aaf_mfa_verified) {
+    userClaims['amr'] = ['mfa', 'aaf'];   // step-up completed
+  } else if (session.entra_verified) {
+    userClaims['amr'] = ['pwd'];           // Entra only, no MFA step-up
+  } else {
+    delete userClaims['amr'];             // incomplete - omit entirely
   }
 
   if (session.acr_claims) {
@@ -79,29 +77,25 @@ function sanitizeClaimsParameter(claims: string | undefined): string | undefined
 
 export function discovery(req: Request, res: Response): void {
   const baseUrl = config.baseUrl;
-  const aafMfaConfig = getAafMfaConfig();
-  // The bridge is the JWT issuer and holds the signing keys, so issuer and
-  // jwks_uri always point here. The authorization, token, and userinfo
-  // endpoints advertise the AAF endpoints (when configured) so that Entra
-  // can use them directly. This intentional proxy arrangement means the
-  // issuer does not match those endpoints, which is by design.
   res.json({
     issuer: baseUrl,
-    authorization_endpoint: aafMfaConfig.authorizeEndpoint || `${baseUrl}/authorize`,
-    token_endpoint: aafMfaConfig.tokenEndpoint || `${baseUrl}/token`,
-    userinfo_endpoint: aafMfaConfig.userInfoEndpoint || `${baseUrl}/userinfo`,
+    authorization_endpoint: `${baseUrl}/authorize`,
+    token_endpoint: `${baseUrl}/token`,
+    userinfo_endpoint: `${baseUrl}/userinfo`,
     jwks_uri: `${baseUrl}/.well-known/jwks.json`,
     response_types_supported: ['code'],
     subject_types_supported: ['public'],
     id_token_signing_alg_values_supported: ['RS256'],
-    scopes_supported: ['openid', 'profile', 'email'],
+    scopes_supported: getScopesSupported(),
     token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic'],
-    claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'name', 'email', 'upn', 'amr', 'acr', 'aal', 'auth_time'],
+    claims_supported: getClaimsSupported(),
   });
 }
 
 export function jwks(req: Request, res: Response): void {
-  res.json(getJwks());
+  const jwksPayload = getJwks();
+  logger.debug(`[JWKS] Response: ${JSON.stringify(jwksPayload)}`);
+  res.json(jwksPayload);
 }
 
 // ---------------------------------------------------------------------------
@@ -143,14 +137,14 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
       return;
     }
 
-    // Validate id_token_hint structure if provided
+    // Cryptographically verify id_token_hint if provided
     let validatedHint: string | null = null;
     if (id_token_hint) {
-      const hintPayload = decodeIdTokenHint(id_token_hint);
-      if (hintPayload) {
+      try {
+        await verifyEntraIdToken(id_token_hint);
         validatedHint = id_token_hint;
-      } else {
-        logger.warn('Received malformed id_token_hint; ignoring');
+      } catch {
+        logger.warn('Received id_token_hint with invalid signature or claims; ignoring');
       }
     }
 
@@ -251,12 +245,6 @@ export async function callbackEntra(req: Request, res: Response, next: NextFunct
     const tokenSet = await exchangeCode(code, state);
     const userClaims = await getUserInfo(tokenSet);
 
-    // Extract AMR and ACR from Entra ID token claims
-    const amrClaims = Array.isArray(userClaims['amr'])
-      ? (userClaims['amr'] as unknown[]).filter((item): item is string => typeof item === 'string')
-      : null;
-    const acrClaims = typeof userClaims['acr'] === 'string' ? (userClaims['acr'] as string) : null;
-
     const mappings = getAttributeMappings();
     const mappedClaims: Record<string, unknown> = { ...userClaims };
     for (const mapping of mappings) {
@@ -265,7 +253,14 @@ export async function callbackEntra(req: Request, res: Response, next: NextFunct
       }
     }
 
-    updateSessionTokens(state, { access_token: tokenSet.access_token, id_token: tokenSet.id_token }, mappedClaims, amrClaims, acrClaims);
+    // Strip Entra's internal amr/acr from stored claims — the bridge
+    // synthesises its own amr for AAF via enrichClaimsWithStepUp().
+    delete mappedClaims['amr'];
+    delete mappedClaims['acr'];
+
+    // Pass null for amrClaims/acrClaims so Entra's internal values are never
+    // persisted to session.amr_claims or session.acr_claims.
+    updateSessionTokens(state, { access_token: tokenSet.access_token, id_token: tokenSet.id_token }, mappedClaims, null, null);
     markEntraVerified(state);
 
     const userIdentifier =
@@ -396,22 +391,37 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
 
     // Exchange the AAF MFA code to verify completion (if token endpoint configured)
     const callbackUri = `${config.baseUrl}/callback/aaf`;
-    const { verified: mfaVerified, accessToken: mfaAccessToken } = await exchangeAafMfaCode(code, bridgeState, callbackUri);
-    if (!mfaVerified) {
+    const mfaResult = await exchangeAafMfaCode(code, bridgeState, callbackUri);
+    if (!mfaResult.verified) {
       createAuditLog('aaf_mfa_failure', null, 'AAF MFA code exchange failed', req.ip || null);
       res.status(400).send('AAF MFA verification failed');
       return;
     }
 
-    markAafMfaVerified(bridgeState);
-
-    // Fetch live claims from AAF MFA userinfo and merge additively into session
-    if (mfaAccessToken) {
-      const aafMfaClaims = await getAafMfaUserInfo(mfaAccessToken);
-      if (Object.keys(aafMfaClaims).length > 0) {
-        mergeSessionUserClaims(bridgeState, aafMfaClaims);
+    // Fetch additional claims from AAF MFA userinfo and merge them into the session.
+    // Core OIDC claims (sub, iss, aud, iat, exp) are preserved from the original
+    // session to prevent claim injection from a potentially compromised AAF endpoint.
+    if (mfaResult.accessToken) {
+      const aafUserInfo = await getAafMfaUserInfo(mfaResult.accessToken);
+      if (Object.keys(aafUserInfo).length > 0 && bridgeSession.user_claims) {
+        const existingClaims = JSON.parse(bridgeSession.user_claims) as Record<string, unknown>;
+        // Merge AAF claims additively; core OIDC claims from the original session take precedence
+        const PROTECTED_CLAIMS = new Set(['sub', 'iss', 'aud', 'iat', 'exp', 'nonce']);
+        const safeMfaClaims = Object.fromEntries(
+          Object.entries(aafUserInfo).filter(([k]) => !PROTECTED_CLAIMS.has(k))
+        );
+        const mergedClaims = { ...existingClaims, ...safeMfaClaims };
+        const entraTokens = bridgeSession.entra_tokens
+          ? JSON.parse(bridgeSession.entra_tokens) as object
+          : {};
+        const existingAmrClaims = bridgeSession.amr_claims
+          ? JSON.parse(bridgeSession.amr_claims) as string[]
+          : null;
+        updateSessionTokens(bridgeState, entraTokens, mergedClaims, existingAmrClaims, bridgeSession.acr_claims);
       }
     }
+
+    markAafMfaVerified(bridgeState);
 
     // Generate the final authorization code for the original AAF OIDC client
     const authCode = generateAuthCode(bridgeState);
@@ -526,7 +536,8 @@ export async function userinfo(req: Request, res: Response, next: NextFunction):
 
     const sub = payload['sub'] as string;
 
-    // Return enriched session claims (amr/acr/aal included) rather than raw token payload
+    // Look up the active session to return enriched claims (amr/acr/aal) rather
+    // than just the raw access-token payload.
     const sessions = getActiveSessions();
     const session = sessions.find(s => {
       if (!s.user_claims) return false;
@@ -550,12 +561,12 @@ export async function userinfo(req: Request, res: Response, next: NextFunction):
 }
 
 // ---------------------------------------------------------------------------
-// /entra-login — handles Entra implicit-flow token posted from the frontend
+// /entra-login — removed; retained as 410 Gone for graceful deprecation
 // ---------------------------------------------------------------------------
 
 export function entraLogin(_req: Request, res: Response): void {
   res.status(410).json({
     error: 'endpoint_removed',
-    error_description: 'Use the standard OIDC authorization code flow via /authorize.',
+    error_description: 'The /entra-login endpoint has been removed. Use the standard OIDC authorization code flow via /authorize.',
   });
 }

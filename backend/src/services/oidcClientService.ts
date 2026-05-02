@@ -78,11 +78,10 @@ export async function getUserInfo(tokenSet: TokenSet): Promise<Record<string, un
   if (tokenSet.access_token) {
     try {
       const userinfoEndpoint = client.issuer.metadata.userinfo_endpoint as string | undefined;
+      const accessToken = tokenSet.access_token;
       if (userinfoEndpoint) {
-        const userInfoClaims = await logOutboundRequest(
-          'GET',
-          userinfoEndpoint,
-          () => client.userinfo(tokenSet.access_token!) as Promise<Record<string, unknown>>,
+        const userInfoClaims = await logOutboundRequest('GET', userinfoEndpoint,
+          () => client.userinfo(accessToken) as Promise<Record<string, unknown>>,
         );
         return { ...idTokenClaims, ...userInfoClaims };
       }

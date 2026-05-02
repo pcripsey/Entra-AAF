@@ -3,11 +3,12 @@ import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
 import { config } from '../config';
-import { getEntraConfig, setEntraConfig, getAafConfig, setAafConfig, getAttributeMappings, setAttributeMappings, getAafMfaConfig, setAafMfaConfig, getConfig } from '../models/config';
+import { getEntraConfig, setEntraConfig, getAafConfig, setAafConfig, getAttributeMappings, setAttributeMappings, getAafMfaConfig, setAafMfaConfig, getConfig, getScopesSupported, setScopesSupported, getClaimsSupported, setClaimsSupported } from '../models/config';
 import { getAuditLogs, getAuditLogsCount, createAuditLog } from '../models/auditLog';
 import { getActiveSessions } from '../services/sessionService';
 import { isAafMfaConfigured } from '../services/aafMfaService';
 import { invalidateClientCache, decodeIdTokenHint } from '../services/oidcClientService';
+import { getLogLevel, setLogLevel } from '../utils/logger';
 
 const startTime = Date.now();
 
@@ -144,6 +145,7 @@ export function getSessions(req: Request, res: Response): void {
       entra_verified: !!s.entra_verified,
       aaf_mfa_verified: !!s.aaf_mfa_verified,
       step_up_status: stepUpStatus,
+      requested_claims: s.requested_claims,
     };
   });
   res.json(sanitized);
@@ -202,6 +204,51 @@ export function updateAafMfaConfigController(req: Request, res: Response): void 
   setAafMfaConfig(authorizeEndpoint, tokenEndpoint, userInfoEndpoint, clientId, clientSecret);
   const sess = (req.session as unknown) as AdminSession;
   createAuditLog('aaf_mfa_config_updated', sess.username || 'admin', null, req.ip || null);
+  res.json({ success: true });
+}
+
+const REQUIRED_SCOPES = ['openid'];
+const REQUIRED_CLAIMS = ['sub', 'iss', 'aud', 'exp', 'iat'];
+
+export function getOidcDiscoveryConfigController(req: Request, res: Response): void {
+  res.json({
+    scopesSupported: getScopesSupported(),
+    claimsSupported: getClaimsSupported(),
+  });
+}
+
+export function updateOidcDiscoveryConfigController(req: Request, res: Response): void {
+  const { scopesSupported, claimsSupported } = req.body as {
+    scopesSupported: unknown;
+    claimsSupported: unknown;
+  };
+
+  if (
+    !Array.isArray(scopesSupported) ||
+    !scopesSupported.every((s) => typeof s === 'string') ||
+    !Array.isArray(claimsSupported) ||
+    !claimsSupported.every((c) => typeof c === 'string')
+  ) {
+    res.status(400).json({ error: 'scopesSupported and claimsSupported must be arrays of strings.' });
+    return;
+  }
+
+  const missingScopes = REQUIRED_SCOPES.filter((s) => !scopesSupported.includes(s));
+  if (missingScopes.length > 0) {
+    res.status(400).json({ error: `Required scopes are missing: ${missingScopes.join(', ')}` });
+    return;
+  }
+
+  const missingClaims = REQUIRED_CLAIMS.filter((c) => !claimsSupported.includes(c));
+  if (missingClaims.length > 0) {
+    res.status(400).json({ error: `Required claims are missing: ${missingClaims.join(', ')}` });
+    return;
+  }
+
+  setScopesSupported(scopesSupported as string[]);
+  setClaimsSupported(claimsSupported as string[]);
+  const sess = (req.session as unknown) as AdminSession;
+  createAuditLog('oidc_discovery_config_updated', sess.username || 'admin', null, req.ip || null);
   res.json({ success: true });
 }
 
@@ -284,4 +331,20 @@ export async function getBackendLogsController(req: Request, res: Response): Pro
   });
 
   res.json({ logs: parsed, total, page, limit });
+}
+
+export function getLogLevelController(req: Request, res: Response): void {
+  res.json({ level: getLogLevel() });
+}
+
+export function setLogLevelController(req: Request, res: Response): void {
+  const { level } = req.body as { level: string };
+  if (!level || (level !== 'info' && level !== 'debug')) {
+    res.status(400).json({ error: 'level must be "info" or "debug"' });
+    return;
+  }
+  setLogLevel(level);
+  const sess = (req.session as unknown) as AdminSession;
+  createAuditLog('log_level_changed', sess.username || 'admin', `level set to ${level}`, req.ip || null);
+  res.json({ success: true, level });
 }
