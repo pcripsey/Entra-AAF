@@ -77,7 +77,14 @@ const DEFAULT_CLAIMS = ['sub', 'iss', 'aud', 'exp', 'iat', 'name', 'email', 'upn
 
 export function getScopesSupported(): string[] {
   const raw = getConfig('oidc.scopesSupported');
-  return raw ? JSON.parse(raw) as string[] : DEFAULT_SCOPES;
+  if (raw) {
+    try {
+      return JSON.parse(raw) as string[];
+    } catch {
+      return DEFAULT_SCOPES;
+    }
+  }
+  return DEFAULT_SCOPES;
 }
 
 export function setScopesSupported(scopes: string[]): void {
@@ -86,7 +93,14 @@ export function setScopesSupported(scopes: string[]): void {
 
 export function getClaimsSupported(): string[] {
   const raw = getConfig('oidc.claimsSupported');
-  return raw ? JSON.parse(raw) as string[] : DEFAULT_CLAIMS;
+  if (raw) {
+    try {
+      return JSON.parse(raw) as string[];
+    } catch {
+      return DEFAULT_CLAIMS;
+    }
+  }
+  return DEFAULT_CLAIMS;
 }
 
 export function setClaimsSupported(claims: string[]): void {

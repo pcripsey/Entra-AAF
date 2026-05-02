@@ -206,6 +206,9 @@ export function updateAafMfaConfigController(req: Request, res: Response): void 
   res.json({ success: true });
 }
 
+const REQUIRED_SCOPES = ['openid'];
+const REQUIRED_CLAIMS = ['sub', 'iss', 'aud', 'exp', 'iat'];
+
 export function getOidcDiscoveryConfigController(req: Request, res: Response): void {
   res.json({
     scopesSupported: getScopesSupported(),
@@ -215,11 +218,34 @@ export function getOidcDiscoveryConfigController(req: Request, res: Response): v
 
 export function updateOidcDiscoveryConfigController(req: Request, res: Response): void {
   const { scopesSupported, claimsSupported } = req.body as {
-    scopesSupported: string[];
-    claimsSupported: string[];
+    scopesSupported: unknown;
+    claimsSupported: unknown;
   };
-  setScopesSupported(scopesSupported);
-  setClaimsSupported(claimsSupported);
+
+  if (
+    !Array.isArray(scopesSupported) ||
+    !scopesSupported.every((s) => typeof s === 'string') ||
+    !Array.isArray(claimsSupported) ||
+    !claimsSupported.every((c) => typeof c === 'string')
+  ) {
+    res.status(400).json({ error: 'scopesSupported and claimsSupported must be arrays of strings.' });
+    return;
+  }
+
+  const missingScopes = REQUIRED_SCOPES.filter((s) => !scopesSupported.includes(s));
+  if (missingScopes.length > 0) {
+    res.status(400).json({ error: `Required scopes are missing: ${missingScopes.join(', ')}` });
+    return;
+  }
+
+  const missingClaims = REQUIRED_CLAIMS.filter((c) => !claimsSupported.includes(c));
+  if (missingClaims.length > 0) {
+    res.status(400).json({ error: `Required claims are missing: ${missingClaims.join(', ')}` });
+    return;
+  }
+
+  setScopesSupported(scopesSupported as string[]);
+  setClaimsSupported(claimsSupported as string[]);
   const sess = (req.session as unknown) as AdminSession;
   createAuditLog('oidc_discovery_config_updated', sess.username || 'admin', null, req.ip || null);
   res.json({ success: true });
