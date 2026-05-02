@@ -2,32 +2,30 @@ import { SignJWT, jwtVerify } from 'jose';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { getPrivateKey, getPublicKey } from '../utils/jwks';
+import { getDb } from '../models/database';
 
-interface AuthCodeEntry {
-  sessionState: string;
-  expiresAt: number;
+interface AuthCodeRow {
+  session_state: string;
+  expires_at: string;
 }
 
-const authCodes = new Map<string, AuthCodeEntry>();
-
 export function generateAuthCode(sessionState: string): string {
+  const db = getDb();
   const code = uuidv4();
-  authCodes.set(code, {
-    sessionState,
-    expiresAt: Date.now() + 5 * 60 * 1000,
-  });
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  db.prepare('INSERT INTO auth_codes (code, session_state, expires_at) VALUES (?, ?, ?)').run(code, sessionState, expiresAt);
+  // Opportunistically clean up expired codes
+  db.prepare('DELETE FROM auth_codes WHERE expires_at < ?').run(new Date().toISOString());
   return code;
 }
 
 export function validateAuthCode(code: string): string | null {
-  const entry = authCodes.get(code);
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) {
-    authCodes.delete(code);
-    return null;
-  }
-  authCodes.delete(code);
-  return entry.sessionState;
+  const db = getDb();
+  const row = db.prepare('SELECT session_state, expires_at FROM auth_codes WHERE code = ?').get(code) as AuthCodeRow | undefined;
+  if (!row) return null;
+  db.prepare('DELETE FROM auth_codes WHERE code = ?').run(code);
+  if (new Date(row.expires_at) < new Date()) return null;
+  return row.session_state;
 }
 
 export async function generateIdToken(

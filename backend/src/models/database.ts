@@ -33,6 +33,11 @@ export function initializeDatabase(): void {
       entra_verified INTEGER NOT NULL DEFAULT 0,
       aaf_mfa_verified INTEGER NOT NULL DEFAULT 0,
       aaf_original_state TEXT,
+      requested_claims TEXT,
+      is_entra_initiated INTEGER NOT NULL DEFAULT 0,
+      entra_transaction_id TEXT,
+      code_challenge TEXT,
+      code_challenge_method TEXT,
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL
     );
@@ -50,6 +55,12 @@ export function initializeDatabase(): void {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_codes (
+      code TEXT PRIMARY KEY,
+      session_state TEXT NOT NULL,
+      expires_at TEXT NOT NULL
     );
   `);
 
@@ -75,6 +86,18 @@ export function initializeDatabase(): void {
   }
   if (!sessionColumns.includes('requested_claims')) {
     db.exec('ALTER TABLE sessions ADD COLUMN requested_claims TEXT');
+  }
+  if (!sessionColumns.includes('is_entra_initiated')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN is_entra_initiated INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!sessionColumns.includes('entra_transaction_id')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN entra_transaction_id TEXT');
+  }
+  if (!sessionColumns.includes('code_challenge')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN code_challenge TEXT');
+  }
+  if (!sessionColumns.includes('code_challenge_method')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN code_challenge_method TEXT');
   }
 
   // Migrate audit_logs table to add DNS columns if they don't exist

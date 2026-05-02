@@ -1,39 +1,78 @@
 # Entra-AAF Bridge
 
-An OIDC bridge application that connects Microsoft Entra ID (Azure AD) as an upstream identity provider with OpenText Advanced Authentication Framework (AAF) as a downstream OIDC consumer, supporting a **step-up authentication flow** where users authenticate with Entra first, then proceed to AAF for second-factor MFA, before the bridge issues federated tokens.
+An OIDC bridge application that connects Microsoft Entra ID (Azure AD) as an identity provider with OpenText Advanced Authentication Framework (AAF) as an MFA provider.  The bridge supports **two complementary authentication flows**:
+
+1. **AAF-as-initiator (standard step-up)** — AAF calls the bridge as an OIDC provider; the bridge orchestrates Entra first-factor and AAF MFA second-factor before issuing a federated token.
+2. **Entra-as-initiator (EAM / External Authentication Method)** — Entra calls the bridge after completing its own first-factor authentication so the bridge can enforce AAF MFA as the second factor and return a signed result to Entra.
 
 ## Architecture
 
 The bridge acts as:
 - **OIDC Provider** (to OpenText AAF): Exposes standard OIDC endpoints
 - **OIDC Client** (to Microsoft Entra ID): Authenticates users via Entra ID (first factor)
-- **OIDC Client** (to AAF MFA): Routes authenticated Entra users to AAF for MFA (second factor, optional)
+- **OIDC Client** (to AAF MFA): Routes authenticated Entra users to AAF for MFA (second factor)
+- **External Authentication Method provider** (to Entra EAM): Receives Entra-initiated requests after first-factor auth, performs AAF MFA, and returns a signed id_token to Entra
 
-## Step-Up Authentication Flow
+## Flow 1 — AAF-as-initiator (standard step-up)
 
 When `AAF_AUTHORIZE_ENDPOINT` is configured the bridge orchestrates a two-hop step-up:
 
 ```
-AAF → /authorize
+AAF → GET /authorize
          ↓
-    /login/entra  (bridge redirects to Entra ID)
+   GET /login/entra  (bridge redirects to Entra ID for 1FA)
          ↓
-  Entra ID login
+   Entra ID login
          ↓
-  /callback/entra (bridge validates Entra auth, marks entra_verified)
+   GET /callback/entra (bridge validates Entra auth, marks entra_verified)
          ↓
-    /login/aaf   (bridge redirects to AAF for MFA)
+   GET /login/aaf   (bridge redirects to AAF for MFA)
          ↓
-  AAF MFA         (second factor)
+   AAF MFA           (second factor)
          ↓
-  /callback/aaf  (bridge validates MFA, marks aaf_mfa_verified)
+   GET /callback/aaf  (bridge validates MFA, marks aaf_mfa_verified)
          ↓
 AAF ← auth code  (bridge issues code → AAF exchanges at /token)
          ↓
-  /token          (bridge issues JWT with aal=MFA, amr=[mfa,aaf])
+   POST /token       (bridge issues JWT with aal=MFA, amr=[mfa,aaf])
 ```
 
 If `AAF_AUTHORIZE_ENDPOINT` is not set, step-up is disabled and the bridge falls back to the original Entra-only flow.
+
+### AAF-as-initiator with `id_token_hint` shortcut
+
+When AAF (or any OIDC relying party) passes a cryptographically valid `id_token_hint` in the `/authorize` request, the bridge treats it as proof that Entra first-factor authentication has already been completed and skips the Entra redirect, proceeding directly to AAF MFA.  This is useful when the calling application already holds a valid Entra ID token.
+
+## Flow 2 — Entra-as-initiator (External Authentication Method)
+
+When Microsoft Entra Conditional Access is configured to use this bridge as an **External Authentication Method**, Entra redirects the user here after its own first-factor authentication:
+
+```
+User → Entra ID (1FA: password / passkey)
+                  ↓
+   Entra Conditional Access requires External MFA
+                  ↓
+   GET /entra-eam  (Entra redirects user to bridge)
+                  ↓
+   GET /login/aaf  (bridge redirects to AAF for MFA)
+                  ↓
+   AAF MFA         (second factor)
+                  ↓
+   GET /callback/aaf (bridge validates MFA, marks aaf_mfa_verified)
+                  ↓
+   Entra ← id_token  (bridge issues signed id_token with amr=[mfa,aaf])
+                  ↓
+   Entra issues its token with step-up claims
+```
+
+### Azure configuration steps for EAM
+
+1. Register the bridge as an **External Authentication Method** in your Entra tenant under **Security → Authentication methods → External Authentication Methods**.
+2. Set the **Authentication provider URL** to `{BASE_URL}/entra-eam`.
+3. Set the **Client ID** to the bridge's Entra App Registration `ENTRA_CLIENT_ID`.
+4. In the Entra App Registration for the bridge, add `{BASE_URL}/entra-eam` as a redirect URI.
+5. Create a **Conditional Access policy** that requires the external MFA for the target applications.
+6. Optionally set `ENTRA_EAM_ALLOWED_REDIRECT_URIS` if your tenant uses a non-standard Entra redirect domain.
 
 ## Quick Start
 
@@ -72,6 +111,7 @@ Open http://localhost (frontend) and login with your configured admin credential
 | `ENTRA_CLIENT_ID` | Entra App Client ID | - |
 | `ENTRA_CLIENT_SECRET` | Entra App Client Secret | - |
 | `ENTRA_REDIRECT_URI` | Entra redirect URI (use `/callback/entra`) | - |
+| `ENTRA_DISCOVERY_URL` | Override the OIDC discovery URL (sovereign clouds) | - |
 | `AAF_CLIENT_ID` | AAF's OIDC client ID for calling this bridge | - |
 | `AAF_CLIENT_SECRET` | AAF's OIDC client secret | - |
 | `AAF_REDIRECT_URIS` | Comma-separated list of AAF redirect URIs | - |
@@ -80,13 +120,15 @@ Open http://localhost (frontend) and login with your configured admin credential
 | `AAF_USERINFO_ENDPOINT` | **Step-up**: AAF UserInfo endpoint | - |
 | `AAF_MFA_CLIENT_ID` | **Step-up**: Bridge's client ID registered at AAF's auth server | - |
 | `AAF_MFA_CLIENT_SECRET` | **Step-up**: Bridge's client secret at AAF's auth server | - |
+| `ENTRA_EAM_ALLOWED_REDIRECT_URIS` | **EAM**: Extra allowed Entra redirect URIs (comma-separated) | - |
 
 ### Entra ID App Registration
 
 1. Register an app in Azure Portal
 2. Set redirect URI to `{BASE_URL}/callback/entra` (or `/callback` for backward compatibility)
-3. Grant `openid`, `profile`, `email` permissions
-4. Copy Tenant ID, Client ID, Client Secret
+3. For the EAM flow, also add `{BASE_URL}/entra-eam` as a redirect URI
+4. Grant `openid`, `profile`, `email` permissions
+5. Copy Tenant ID, Client ID, Client Secret
 
 ### OpenText AAF Configuration
 
@@ -102,13 +144,14 @@ Configure AAF to use this bridge as an OIDC provider:
 |----------|--------|-------------|
 | `/.well-known/openid-configuration` | GET | OIDC discovery document |
 | `/.well-known/jwks.json` | GET | JSON Web Key Set |
-| `/authorize` | GET | Authorization endpoint (AAF entry point, initiates step-up) |
+| `/authorize` | GET | Authorization endpoint (AAF entry point, initiates step-up; also accepts `id_token_hint` to skip Entra 1FA) |
 | `/login/entra` | GET | Redirects user to Entra ID for first-factor authentication |
 | `/callback/entra` | GET | Entra ID callback; validates token and proceeds to AAF MFA |
 | `/login/aaf` | GET | Redirects user to AAF for second-factor MFA |
-| `/callback/aaf` | GET | AAF MFA callback; validates MFA completion and issues auth code |
+| `/callback/aaf` | GET | AAF MFA callback; validates MFA completion and issues auth code or id_token |
 | `/callback` | GET | Backward-compatible alias for `/callback/entra` |
-| `/token` | POST | Token endpoint (requires both Entra + AAF MFA when step-up is enabled) |
+| `/entra-eam` | GET | **EAM entry point**: Entra redirects users here after 1FA; bridge performs AAF MFA and returns id_token to Entra |
+| `/token` | POST | Token endpoint (requires both Entra + AAF MFA when step-up is enabled; validates PKCE `code_verifier` when `code_challenge` was used) |
 | `/userinfo` | GET | UserInfo endpoint |
 | `/health` | GET | Health check |
 
@@ -152,5 +195,8 @@ npm start
 - All secrets should be rotated regularly
 - Admin password must be set via environment variable
 - Sessions expire after 10 minutes
+- Authorization codes are stored in SQLite (survive restarts) and expire after 5 minutes
+- PKCE (RFC 7636) is supported: include `code_challenge` / `code_challenge_method=S256` in `/authorize` and `code_verifier` in `/token`
 - State tokens are correlated by UUID — single-use authorization codes expire after 5 minutes
 - Admin console uses local session authentication, completely isolated from Entra/AAF flows
+- EAM endpoint validates `client_id` and `redirect_uri`; optionally validates an Entra-signed `request` JWT for cryptographic proof of origin
