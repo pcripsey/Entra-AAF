@@ -188,10 +188,9 @@ export async function entraEam(req: Request, res: Response, next: NextFunction):
 
 /**
  * Decodes the `id_token_hint` JWT payload without signature verification.
- * Used in the EAM callback only to extract the subject for audit logging;
- * all security-relevant checks must use verifyEntraIdToken instead.
- *
- * Re-exported here so the oidcProvider module can use it without changing
- * its existing import surface.
+ * Re-exported here so `oidcProvider.ts` can use it in both the `/authorize`
+ * id_token_hint shortcut flow and any EAM-related logic without changing its
+ * existing import surface.  All security-relevant checks must use
+ * `verifyEntraIdToken` before calling this function.
  */
 export { decodeIdTokenHint };

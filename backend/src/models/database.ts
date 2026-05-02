@@ -100,15 +100,6 @@ export function initializeDatabase(): void {
     db.exec('ALTER TABLE sessions ADD COLUMN code_challenge_method TEXT');
   }
 
-  // Migrate auth_codes table (auth codes persisted to DB instead of in-memory Map)
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS auth_codes (
-      code TEXT PRIMARY KEY,
-      session_state TEXT NOT NULL,
-      expires_at TEXT NOT NULL
-    );
-  `);
-
   // Migrate audit_logs table to add DNS columns if they don't exist
   const auditColumns = (db.prepare('PRAGMA table_info(audit_logs)').all() as { name: string }[]).map(c => c.name);
   if (!auditColumns.includes('source_dns')) {
