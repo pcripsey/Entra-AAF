@@ -8,6 +8,7 @@ import { getAuditLogs, getAuditLogsCount, createAuditLog } from '../models/audit
 import { getActiveSessions } from '../services/sessionService';
 import { isAafMfaConfigured } from '../services/aafMfaService';
 import { invalidateClientCache, decodeIdTokenHint } from '../services/oidcClientService';
+import { getLogLevel, setLogLevel } from '../utils/logger';
 
 const startTime = Date.now();
 
@@ -330,4 +331,20 @@ export async function getBackendLogsController(req: Request, res: Response): Pro
   });
 
   res.json({ logs: parsed, total, page, limit });
+}
+
+export function getLogLevelController(req: Request, res: Response): void {
+  res.json({ level: getLogLevel() });
+}
+
+export function setLogLevelController(req: Request, res: Response): void {
+  const { level } = req.body as { level: string };
+  if (level !== 'info' && level !== 'debug') {
+    res.status(400).json({ error: 'level must be "info" or "debug"' });
+    return;
+  }
+  setLogLevel(level);
+  const sess = (req.session as unknown) as AdminSession;
+  createAuditLog('log_level_changed', sess.username || 'admin', `level set to ${level}`, req.ip || null);
+  res.json({ success: true, level });
 }

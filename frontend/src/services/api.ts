@@ -60,4 +60,7 @@ export const getBackendLogs = (params: {
   search?: string;
 }) => api.get('/admin/backend-logs', { params });
 
+export const getLogLevel = () => api.get('/admin/log-level');
+export const setLogLevel = (level: 'info' | 'debug') => api.put('/admin/log-level', { level });
+
 export default api;

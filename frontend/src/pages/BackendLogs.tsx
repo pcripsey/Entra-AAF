@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getBackendLogs } from '../services/api';
+import { getBackendLogs, getLogLevel, setLogLevel } from '../services/api';
 import { BackendLogEntry } from '../types';
 import Card from '../components/common/Card';
 import Badge from '../components/common/Badge';
@@ -18,6 +18,7 @@ function getLevelBadge(level: string): BadgeVariant {
   if (l === 'ERROR') return 'error';
   if (l === 'WARN') return 'warning';
   if (l === 'INFO') return 'success';
+  if (l === 'DEBUG') return 'info';
   return 'info';
 }
 
@@ -87,6 +88,7 @@ export default function BackendLogs() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [debugEnabled, setDebugEnabled] = useState(false);
   const limit = 100;
 
   const load = useCallback(async (p: number, type: LogType, d: string, s: string) => {
@@ -99,6 +101,13 @@ export default function BackendLogs() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    void getLogLevel().then((res) => {
+      const data = res.data as { level: string };
+      setDebugEnabled(data.level === 'debug');
+    });
   }, []);
 
   useEffect(() => { void load(page, logType, date, search); }, [page, logType, date, search, load]);
@@ -122,6 +131,14 @@ export default function BackendLogs() {
   const handleClearSearch = () => {
     setSearchInput('');
     setSearch('');
+    setPage(1);
+  };
+
+  const handleDebugToggle = async () => {
+    const newLevel = debugEnabled ? 'info' : 'debug';
+    await setLogLevel(newLevel);
+    setDebugEnabled(!debugEnabled);
+    void load(1, logType, date, search);
     setPage(1);
   };
 
@@ -185,6 +202,18 @@ export default function BackendLogs() {
                 </Button>
               )}
             </form>
+
+            <div className={styles.filterGroup}>
+              <span className={styles.filterLabel}>Debug logging:</span>
+              <Button
+                variant={debugEnabled ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => { void handleDebugToggle(); }}
+                aria-pressed={debugEnabled}
+              >
+                {debugEnabled ? 'On' : 'Off'}
+              </Button>
+            </div>
           </div>
         </Card.Header>
         <Card.Body>
@@ -200,6 +229,10 @@ export default function BackendLogs() {
             <span className={styles.legendItem}>
               <span className={`${styles.legendDot} ${styles.error}`} aria-hidden="true" />
               ERROR
+            </span>
+            <span className={styles.legendItem}>
+              <span className={`${styles.legendDot} ${styles.debug}`} aria-hidden="true" />
+              DEBUG
             </span>
           </div>
 
