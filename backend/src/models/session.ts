@@ -149,5 +149,3 @@ export function getAllActiveSessions(): BridgeSession[] {
   const db = getDb();
   return db.prepare('SELECT * FROM sessions WHERE expires_at > ?').all(new Date().toISOString()) as BridgeSession[];
 }
-
-}
