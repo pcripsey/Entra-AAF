@@ -101,6 +101,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
   res.on('finish', () => {
     const duration = Date.now() - start;
     const hasBody = req.body && Object.keys(req.body as object).length > 0;
+    const hasQuery = req.query && Object.keys(req.query).length > 0;
     const isError = res.statusCode >= 400;
 
     const entry: Record<string, unknown> = {
@@ -117,6 +118,10 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
 
     if (hasBody) {
       entry.body = sanitizeBody(req.body);
+    }
+
+    if (hasQuery) {
+      entry.query_params = sanitizeBody(req.query);
     }
 
     const level = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info';
