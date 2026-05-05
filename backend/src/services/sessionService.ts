@@ -1,5 +1,13 @@
-import { createSession, getSession, deleteSession, getAllActiveSessions, BridgeSession, markEntraInitiated, setSessionPkce } from '../models/session';
-import { createSession, getSession, deleteSession, getAllActiveSessions, updateSessionUserClaims, BridgeSession } from '../models/session';
+import {
+  createSession,
+  getSession,
+  deleteSession,
+  getAllActiveSessions,
+  updateSessionUserClaims,
+  BridgeSession,
+  markEntraInitiated,
+  setSessionPkce
+} from '../models/session';
 
 export function createBridgeSession(
   state: string,

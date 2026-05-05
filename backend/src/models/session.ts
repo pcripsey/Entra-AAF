@@ -126,6 +126,8 @@ export function markEntraInitiated(state: string, transactionId?: string | null)
 export function setSessionPkce(state: string, codeChallenge: string, codeChallengeMethod: string): void {
   const db = getDb();
   db.prepare('UPDATE sessions SET code_challenge = ?, code_challenge_method = ? WHERE state = ?').run(codeChallenge, codeChallengeMethod, state);
+}
+
 export function updateSessionUserClaims(state: string, userClaims: object): void {
   const db = getDb();
   db.prepare('UPDATE sessions SET user_claims = ? WHERE state = ?')
