@@ -130,7 +130,7 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
     const aafRedirectUris = aafConfig.redirectUris.length ? aafConfig.redirectUris : config.aaf.redirectUris;
 
     if (client_id !== aafClientId) {
-      createAuditLog('authorize_rejected', client_id || null, 'Unknown client_id', req.ip || null);
+      createAuditLog('authorize_rejected', client_id || null, `Unknown client_id: received "${client_id || '(none)'}", expected "${aafClientId}"`, req.ip || null);
       res.status(400).json({ error: 'invalid_client', error_description: 'Unknown client_id' });
       return;
     }
