@@ -13,6 +13,7 @@ export const config = {
   dbPath: process.env.DB_PATH || './data/bridge.db',
   jwtPrivateKeyPath: process.env.JWT_PRIVATE_KEY_PATH || './keys/private.pem',
   jwtPublicKeyPath: process.env.JWT_PUBLIC_KEY_PATH || './keys/public.pem',
+  jwtCertPath: process.env.JWT_CERT_PATH || './keys/cert.pem',
   entra: {
     clientId: process.env.ENTRA_CLIENT_ID || '',
     clientSecret: process.env.ENTRA_CLIENT_SECRET || '',
