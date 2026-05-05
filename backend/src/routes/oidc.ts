@@ -31,6 +31,7 @@ router.get('/.well-known/jwks.json', jwks);
 // AAF-as-initiator step-up flow
 // 1. AAF → /authorize → bridge validates, creates session, redirects to /login/entra
 router.get('/authorize', authFlowLimiter, authorize);
+router.post('/authorize', authFlowLimiter, authorize);
 // 2. /login/entra → bridge redirects user to Entra ID
 router.get('/login/entra', authFlowLimiter, loginEntra);
 // 3. Entra → /callback/entra → bridge exchanges code, marks entra_verified, redirects to /login/aaf
