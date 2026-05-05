@@ -85,6 +85,7 @@ export function discovery(req: Request, res: Response): void {
     userinfo_endpoint: `${baseUrl}/userinfo`,
     jwks_uri: `${baseUrl}/.well-known/jwks.json`,
     response_types_supported: ['code', 'id_token'],
+    response_modes_supported: ['query', 'fragment', 'form_post'],
     subject_types_supported: ['public'],
     id_token_signing_alg_values_supported: ['RS256'],
     scopes_supported: getScopesSupported(),
