@@ -9,6 +9,7 @@
     "dev": "ts-node-dev --respawn src/app.ts"
   },
   "dependencies": {
+    "@peculiar/x509": "^1.12.3",
     "better-sqlite3": "^9.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
