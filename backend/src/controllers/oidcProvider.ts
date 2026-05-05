@@ -80,7 +80,7 @@ export function discovery(req: Request, res: Response): void {
   const baseUrl = config.baseUrl;
   const discoveryDoc = {
     issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/authorize`,
+    authorization_endpoint: `${baseUrl}/entra-eam`,
     token_endpoint: `${baseUrl}/token`,
     userinfo_endpoint: `${baseUrl}/userinfo`,
     jwks_uri: `${baseUrl}/.well-known/jwks.json`,
