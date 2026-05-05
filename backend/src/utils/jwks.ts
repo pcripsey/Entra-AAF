@@ -13,6 +13,9 @@ let privateKeyCache: KeyLike | null = null;
 let publicKeyCache: KeyLike | null = null;
 let jwksCache: object | null = null;
 
+// Certificate validity period in years
+const CERT_VALIDITY_YEARS = 10;
+
 /** Strip PEM headers/footers and whitespace, returning raw base64. */
 function pemToBase64(pem: string): string {
   return pem.replace(/-----[^-]+-----/g, '').replace(/\s/g, '');
@@ -56,10 +59,10 @@ async function ensureCertificate(
   );
 
   const cert = await x509.X509CertificateGenerator.createSelfSigned({
-    serialNumber: '01',
+    serialNumber: Date.now().toString(16).toUpperCase(),
     name: 'CN=Entra-AAF Bridge',
     notBefore: new Date(),
-    notAfter: new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000), // 10 years
+    notAfter: new Date(Date.now() + CERT_VALIDITY_YEARS * 365 * 24 * 60 * 60 * 1000),
     signingAlgorithm: rsaParams,
     keys: { privateKey: cryptoPrivateKey, publicKey: cryptoPublicKey },
     extensions: [
@@ -111,7 +114,8 @@ export async function initializeKeys(): Promise<void> {
 
   // x5c: base64-encoded DER (no PEM headers), wrapped in an array per RFC 7517
   const x5c = pemToBase64(certPem);
-  // x5t: base64url SHA-1 thumbprint of the DER certificate
+  // x5t: base64url SHA-1 thumbprint of the DER certificate (required by RFC 7517 §4.8)
+  // lgtm[js/weak-cryptographic-algorithm]
   const x5t = createHash('sha1').update(certDer).digest('base64url');
   // x5t#S256: base64url SHA-256 thumbprint of the DER certificate
   const x5tS256 = createHash('sha256').update(certDer).digest('base64url');
