@@ -78,7 +78,7 @@ function sanitizeClaimsParameter(claims: string | undefined): string | undefined
 
 export function discovery(req: Request, res: Response): void {
   const baseUrl = config.baseUrl;
-  res.json({
+  const discoveryDoc = {
     issuer: baseUrl,
     authorization_endpoint: `${baseUrl}/authorize`,
     token_endpoint: `${baseUrl}/token`,
@@ -91,12 +91,32 @@ export function discovery(req: Request, res: Response): void {
     scopes_supported: getScopesSupported(),
     token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic'],
     claims_supported: getClaimsSupported(),
-  });
+  };
+  logger.debug(
+    `[ENTRA INBOUND] ${JSON.stringify({
+      event: 'discovery_request',
+      ip: req.ip,
+      user_agent: req.headers['user-agent'],
+      ...(req.headers['x-forwarded-for'] ? { x_forwarded_for: req.headers['x-forwarded-for'] } : {}),
+      host: req.headers['host'],
+      response: discoveryDoc,
+    })}`,
+  );
+  res.json(discoveryDoc);
 }
 
 export function jwks(req: Request, res: Response): void {
   const jwksPayload = getJwks();
-  logger.debug(`[JWKS] Response: ${JSON.stringify(jwksPayload)}`);
+  logger.debug(
+    `[ENTRA INBOUND] ${JSON.stringify({
+      event: 'jwks_request',
+      ip: req.ip,
+      user_agent: req.headers['user-agent'],
+      ...(req.headers['x-forwarded-for'] ? { x_forwarded_for: req.headers['x-forwarded-for'] } : {}),
+      host: req.headers['host'],
+      response: jwksPayload,
+    })}`,
+  );
   res.json(jwksPayload);
 }
 
@@ -286,6 +306,26 @@ export async function loginEntra(req: Request, res: Response, next: NextFunction
       bridgeSession.id_token_hint
     );
 
+    // Log the full authorization URL being redirected to; redact nonce and
+    // id_token_hint values since these are sensitive.
+    try {
+      const authUrlParsed = new URL(authUrl);
+      const safeParams: Record<string, string> = {};
+      const REDACT_AUTH_PARAMS = new Set(['nonce', 'id_token_hint']);
+      authUrlParsed.searchParams.forEach((value, key) => {
+        safeParams[key] = REDACT_AUTH_PARAMS.has(key) ? '[REDACTED]' : value;
+      });
+      logger.debug(
+        `[ENTRA] ${JSON.stringify({
+          event: 'authorization_redirect',
+          url: `${authUrlParsed.origin}${authUrlParsed.pathname}`,
+          params: safeParams,
+        })}`,
+      );
+    } catch {
+      // Best-effort — do not block the redirect on a logging failure
+    }
+
     res.redirect(authUrl);
   } catch (err) {
     next(err);
@@ -299,6 +339,20 @@ export async function loginEntra(req: Request, res: Response, next: NextFunction
 export async function callbackEntra(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { code, state, error, error_description } = req.query as Record<string, string>;
+
+    // Log all inbound query params, redacting the authorization code value.
+    const safeQuery: Record<string, string> = {};
+    for (const [key, value] of Object.entries(req.query as Record<string, string>)) {
+      safeQuery[key] = key === 'code' ? '[REDACTED]' : value;
+    }
+    logger.debug(
+      `[ENTRA INBOUND] ${JSON.stringify({
+        event: 'callback_entra',
+        ip: req.ip,
+        user_agent: req.headers['user-agent'],
+        query_params: safeQuery,
+      })}`,
+    );
 
     if (error) {
       logger.error(`Entra callback error: ${error} - ${error_description}`);

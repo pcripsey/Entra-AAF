@@ -3,7 +3,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { getEntraConfig } from '../models/config';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import { logOutboundRequest } from '../middleware/outboundLogger';
+import { logEntraOutbound, sanitizeObject } from '../middleware/outboundLogger';
 
 let cachedClient: Client | null = null;
 let cachedTenantId = '';
@@ -27,8 +27,12 @@ export async function getEntraClient(): Promise<Client> {
   const discoveryUrl =
     config.entra.discoveryUrl ||
     `https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`;
-  const issuer = await logOutboundRequest('GET', discoveryUrl, () =>
-    Issuer.discover(discoveryUrl),
+  const issuer = await logEntraOutbound(
+    'GET',
+    discoveryUrl,
+    undefined,
+    () => Issuer.discover(discoveryUrl),
+    (result) => ({ metadata: result.metadata as Record<string, unknown> }),
   );
 
   cachedClient = new issuer.Client({
@@ -66,8 +70,26 @@ export async function exchangeCode(code: string, state: string): Promise<TokenSe
     (client.issuer.token_endpoint as string | undefined) ||
     'https://login.microsoftonline.com/oauth2/v2.0/token';
   const redirectUri = entraConfig.redirectUri || config.entra.redirectUri;
-  const tokenSet = await logOutboundRequest('POST', tokenEndpoint, () =>
-    client.callback(redirectUri, { code, state }, { state }),
+
+  // Build a representative request body for logging purposes only.  The
+  // actual POST body is assembled and sent by openid-client internally;
+  // this object captures the expected fields so operators can see what
+  // was (approximately) sent to the token endpoint.  Sensitive values are
+  // redacted by sanitizeObject() before they reach the log.
+  const requestBody: Record<string, unknown> = {
+    grant_type: 'authorization_code',
+    client_id: entraConfig.clientId || config.entra.clientId,
+    redirect_uri: redirectUri,
+    code,
+    client_secret: entraConfig.clientSecret || config.entra.clientSecret,
+  };
+
+  const tokenSet = await logEntraOutbound(
+    'POST',
+    tokenEndpoint,
+    requestBody,
+    () => client.callback(redirectUri, { code, state }, { state }),
+    (result) => sanitizeObject(result as unknown as Record<string, unknown>),
   );
   return tokenSet;
 }
@@ -80,8 +102,12 @@ export async function getUserInfo(tokenSet: TokenSet): Promise<Record<string, un
       const userinfoEndpoint = client.issuer.metadata.userinfo_endpoint as string | undefined;
       const accessToken = tokenSet.access_token;
       if (userinfoEndpoint) {
-        const userInfoClaims = await logOutboundRequest('GET', userinfoEndpoint,
+        const userInfoClaims = await logEntraOutbound(
+          'GET',
+          userinfoEndpoint,
+          undefined,
           () => client.userinfo(accessToken) as Promise<Record<string, unknown>>,
+          (result) => result as Record<string, unknown>,
         );
         return { ...idTokenClaims, ...userInfoClaims };
       }
