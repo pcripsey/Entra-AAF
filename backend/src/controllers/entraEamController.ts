@@ -84,7 +84,7 @@ export async function entraEam(req: Request, res: Response, next: NextFunction):
 
     // Validate client_id — must match the configured Entra app registration
     if (!expectedClientId || client_id !== expectedClientId) {
-      createAuditLog('entra_eam_rejected', null, `Unknown client_id: ${client_id}`, req.ip || null);
+      createAuditLog('entra_eam_rejected', null, `Unknown client_id: received "${client_id || '(none)'}", expected "${expectedClientId || '(not configured)'}"`, req.ip || null);
       res.status(400).json({ error: 'invalid_client', error_description: 'Unknown client_id' });
       return;
     }
