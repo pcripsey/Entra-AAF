@@ -106,6 +106,10 @@ export function jwks(req: Request, res: Response): void {
 
 export async function authorize(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    // Merge query-string and POST-body parameters.  req.body takes precedence
+    // so that Entra EAM requests (response_mode=form_post) are handled correctly —
+    // Entra sends all parameters as form fields with no query string.
+    const params = { ...req.query, ...(req.body as Record<string, string>) } as Record<string, string>;
     const {
       client_id,
       redirect_uri,
@@ -116,7 +120,7 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
       claims,
       code_challenge,
       code_challenge_method,
-    } = req.query as Record<string, string>;
+    } = params;
 
     // Extract and sanitize the claims parameter — OSP only supports 'acr'
     const sanitizedClaims = sanitizeClaimsParameter(claims);
@@ -137,11 +141,13 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
       return;
     }
 
-    if (response_type !== 'code') {
+    if (response_type !== 'code' && response_type !== 'id_token') {
       createAuditLog('authorize_rejected', client_id, `Unsupported response_type: ${response_type}`, req.ip || null);
       res.status(400).json({ error: 'unsupported_response_type' });
       return;
     }
+
+    const isEntraInitiated = response_type === 'id_token';
 
     if (!state) {
       createAuditLog('authorize_rejected', client_id || null, 'Missing state parameter', req.ip || null);
@@ -181,7 +187,7 @@ export async function authorize(req: Request, res: Response, next: NextFunction)
       client_id,
       validatedHint,
       sanitizedClaims,
-      false,
+      isEntraInitiated,
       null,
       code_challenge || null,
       code_challenge_method || null
