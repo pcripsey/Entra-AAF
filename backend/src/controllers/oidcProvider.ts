@@ -18,6 +18,12 @@ type SessionWithState = { aafState?: string; bridgeState?: string };
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Valid Entra EAM AMR values (RFC 8176 / possessionorinherence class).
+// "mfa" is NOT in this set — it is not a recognised RFC 8176 value.
+const ENTRA_EAM_VALID_AMR = new Set([
+  'face', 'fido', 'fpt', 'hwk', 'iris', 'otp', 'tel', 'pop', 'retina', 'sc', 'sms', 'swk', 'vbm', 'bio',
+]);
+
 /**
  * Synthesises the bridge's own AMR/ACR claims from session state and writes
  * them into the user-claims object.  Mutates `userClaims`.
@@ -27,7 +33,19 @@ type SessionWithState = { aafState?: string; bridgeState?: string };
  */
 function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: BridgeSession): void {
   if (session.aaf_mfa_verified) {
-    userClaims['amr'] = ['mfa'];   // array required by OIDC spec and Entra
+    // If AAF's userinfo already supplied a valid RFC 8176 amr array, honour it.
+    // Otherwise fall back to 'swk' (software-based authenticator) as a safe
+    // default that satisfies Entra EAM's possessionorinherence requirement.
+    const existingAmr = userClaims['amr'];
+    const validFromAaf =
+      Array.isArray(existingAmr) &&
+      existingAmr.length > 0 &&
+      (existingAmr as string[]).some(v => ENTRA_EAM_VALID_AMR.has(v));
+
+    if (!validFromAaf) {
+      userClaims['amr'] = ['swk'];
+    }
+    // else keep the array AAF provided
   } else if (session.entra_verified) {
     userClaims['amr'] = ['pwd'];   // array required by OIDC spec and Entra
   } else {
