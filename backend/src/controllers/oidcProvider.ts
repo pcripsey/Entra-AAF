@@ -606,7 +606,7 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
       ${stateField}
       <noscript><button type="submit">Continue</button></noscript>
     </form>
-    <script nonce="${cspNonce}">document.getElementById('f').submit();</script>
+    <script nonce="${escapeHtml(cspNonce)}">document.getElementById('f').submit();</script>
   </body>
 </html>`);
     } else {
