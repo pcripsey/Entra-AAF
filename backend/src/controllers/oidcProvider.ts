@@ -572,19 +572,37 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
     if (bridgeSession.is_entra_initiated) {
       // -----------------------------------------------------------------------
       // Entra EAM flow — Entra is waiting for an id_token proving the external
-      // MFA was completed.  Issue the id_token directly and redirect back to
+      // MFA was completed.  Issue the id_token directly and POST back to
       // Entra's callback URI (aaf_redirect_uri) so it can continue token issuance.
+      //
+      // NOTE: res.redirect() would send a GET, but the externalauthprovider
+      // endpoint only accepts POST (response_mode=form_post), causing AADSTS900561.
+      // Use an auto-submitting HTML form instead.
       // -----------------------------------------------------------------------
       const clientId = bridgeSession.aaf_client_id || config.entra.clientId;
       const idToken = await generateIdToken(finalClaims, clientId, bridgeSession.nonce);
 
-      const entraCallbackUrl = new URL(redirectUri);
-      entraCallbackUrl.searchParams.set('id_token', idToken);
-      if (originalState) {
-        entraCallbackUrl.searchParams.set('state', originalState);
-      }
+      const escapeHtml = (s: string) =>
+        s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-      res.redirect(entraCallbackUrl.toString());
+      const stateField = originalState
+        ? `<input type="hidden" name="state" value="${escapeHtml(originalState)}" />`
+        : '';
+
+      res.set('Content-Type', 'text/html; charset=utf-8');
+      res.send(`<!DOCTYPE html>
+<html>
+  <head><title>Redirecting\u2026</title></head>
+  <body>
+    <p>Please wait, redirecting\u2026</p>
+    <form id="f" method="POST" action="${escapeHtml(redirectUri)}">
+      <input type="hidden" name="id_token" value="${escapeHtml(idToken)}" />
+      ${stateField}
+      <noscript><button type="submit">Continue</button></noscript>
+    </form>
+    <script>document.getElementById('f').submit();</script>
+  </body>
+</html>`);
     } else {
       // -----------------------------------------------------------------------
       // Standard AAF-as-initiator flow — issue an authorization code that AAF
