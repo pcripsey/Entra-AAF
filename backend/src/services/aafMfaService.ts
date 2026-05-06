@@ -26,11 +26,15 @@ export function isAafMfaConfigured(): boolean {
  *                     the bridge can correlate the callback.
  * @param callbackUri  The bridge's callback URI that AAF will redirect to
  *                     after MFA (e.g. `{BASE_URL}/callback/aaf`).
+ * @param loginHint    Optional email/username hint forwarded to AAF as the
+ *                     standard OIDC `login_hint` parameter so that AAF can
+ *                     pre-identify the user and skip its username prompt.
  */
 export function generateAafMfaAuthorizationUrl(
   bridgeState: string,
   callbackUri: string,
-  sanitizedClaims?: string | null
+  sanitizedClaims?: string | null,
+  loginHint?: string | null
 ): string {
   const dbConfig = getAafMfaConfig();
   const authorizeEndpoint =
@@ -51,6 +55,9 @@ export function generateAafMfaAuthorizationUrl(
   url.searchParams.set('scope', 'openid');
   if (sanitizedClaims) {
     url.searchParams.set('claims', sanitizedClaims);
+  }
+  if (loginHint) {
+    url.searchParams.set('login_hint', loginHint);
   }
 
   return url.toString();

@@ -493,7 +493,23 @@ export async function loginAaf(req: Request, res: Response, next: NextFunction):
     }
 
     const callbackUri = `${config.baseUrl}/callback/aaf`;
-    const aafMfaUrl = generateAafMfaAuthorizationUrl(bridgeState, callbackUri, bridgeSession.requested_claims);
+
+    // Extract the user's email from the already-verified Entra claims so that
+    // AAF can pre-fill (or skip) its username prompt via login_hint.
+    let loginHint: string | undefined;
+    if (bridgeSession.user_claims) {
+      try {
+        const storedClaims = JSON.parse(bridgeSession.user_claims) as Record<string, unknown>;
+        loginHint =
+          (storedClaims['email'] as string | undefined) ||
+          (storedClaims['preferred_username'] as string | undefined) ||
+          (storedClaims['upn'] as string | undefined);
+      } catch {
+        // Best-effort — do not block the redirect on a claims parse failure
+      }
+    }
+
+    const aafMfaUrl = generateAafMfaAuthorizationUrl(bridgeState, callbackUri, bridgeSession.requested_claims, loginHint);
 
     createAuditLog('aaf_mfa_initiated', null, `bridgeState: ${bridgeState}`, req.ip || null);
 
