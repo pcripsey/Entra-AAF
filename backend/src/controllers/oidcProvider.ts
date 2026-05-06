@@ -573,6 +573,7 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
     // Fetch additional claims from AAF MFA userinfo and merge them into the session.
     // Core OIDC claims (sub, iss, aud, iat, exp) are preserved from the original
     // session to prevent claim injection from a potentially compromised AAF endpoint.
+    let finalAmrClaims: string[] | null = null;
     if (mfaResult.accessToken) {
       const aafUserInfo = await getAafMfaUserInfo(mfaResult.accessToken);
       if (Object.keys(aafUserInfo).length > 0 && bridgeSession.user_claims) {
@@ -592,7 +593,7 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
         const existingAmrClaims = bridgeSession.amr_claims
           ? JSON.parse(bridgeSession.amr_claims) as string[]
           : null;
-        const finalAmrClaims = (amrFromAaf && amrFromAaf.length > 0) ? amrFromAaf : existingAmrClaims;
+        finalAmrClaims = (amrFromAaf && amrFromAaf.length > 0) ? amrFromAaf : existingAmrClaims;
         updateSessionTokens(bridgeState, entraTokens, mergedClaims, finalAmrClaims, bridgeSession.acr_claims);
       }
     }
@@ -610,7 +611,8 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
     const originalState = sess.aafState || bridgeSession.aaf_original_state || bridgeState;
     const redirectUri = bridgeSession.aaf_redirect_uri || config.aaf.redirectUris[0];
 
-    createAuditLog('aaf_mfa_success', null, `bridgeState: ${bridgeState}`, req.ip || null);
+    const amrString = finalAmrClaims && finalAmrClaims.length > 0 ? finalAmrClaims.join(',') : 'unknown';
+    createAuditLog('aaf_mfa_success', null, `bridgeState: ${bridgeState}; amr: ${amrString}`, req.ip || null);
     createAuditLog('authentication_success', null, `Step-up complete for bridgeState: ${bridgeState}`, req.ip || null);
 
     if (bridgeSession.is_entra_initiated) {
