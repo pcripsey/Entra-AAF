@@ -47,6 +47,7 @@ router.get('/callback', authFlowLimiter, callback);
 // Entra redirects the user here after first-factor authentication so the
 // bridge can perform AAF MFA and return an id_token back to Entra.
 router.get('/entra-eam', authFlowLimiter, entraEam);
+router.post('/entra-eam', authFlowLimiter, entraEam);
 
 // Token issuance and user info
 router.post('/token', token);
