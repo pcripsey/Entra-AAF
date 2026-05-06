@@ -132,6 +132,14 @@ function buildColumns(tick: number): TableColumn<Session>[] {
     header: 'Requested Claims',
     render: (s) => parseRequestedClaimsAcr(s.requested_claims ?? null),
   },
+  {
+    key: 'amr_claims',
+    header: 'AAF Method',
+    render: (s) => {
+      if (!s.amr_claims || s.amr_claims.length === 0) return '—';
+      return <code className={styles.code}>{s.amr_claims.join(', ')}</code>;
+    },
+  },
   ];
 }
 

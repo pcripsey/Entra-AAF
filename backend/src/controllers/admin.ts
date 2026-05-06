@@ -8,7 +8,7 @@ import { getAuditLogs, getAuditLogsCount, createAuditLog } from '../models/audit
 import { getActiveSessions } from '../services/sessionService';
 import { isAafMfaConfigured } from '../services/aafMfaService';
 import { invalidateClientCache, decodeIdTokenHint } from '../services/oidcClientService';
-import { getLogLevel, setLogLevel } from '../utils/logger';
+import { logger, getLogLevel, setLogLevel } from '../utils/logger';
 
 const startTime = Date.now();
 
@@ -132,6 +132,19 @@ export function getSessions(req: Request, res: Response): void {
       stepUpStatus = 'pending_entra';
     }
 
+    let amr_claims: string[] | null = null;
+    if (s.amr_claims) {
+      try {
+        amr_claims = JSON.parse(s.amr_claims) as string[];
+      } catch {
+        amr_claims = null;
+      }
+    }
+
+    if (s.aaf_mfa_verified) {
+      logger.info(`[AAF METHOD] session: ${s.state} amr: ${JSON.stringify(amr_claims)}`);
+    }
+
     return {
       id: s.id,
       state: s.state,
@@ -146,6 +159,8 @@ export function getSessions(req: Request, res: Response): void {
       aaf_mfa_verified: !!s.aaf_mfa_verified,
       step_up_status: stepUpStatus,
       requested_claims: s.requested_claims,
+      amr_claims,
+      acr_claims: s.acr_claims ?? null,
     };
   });
   res.json(sanitized);

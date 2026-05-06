@@ -24,7 +24,7 @@ export interface Session {
   entra_verified: boolean;
   aaf_mfa_verified: boolean;
   step_up_status: 'pending_entra' | 'pending_mfa' | 'completed';
-  amr_claims: string | null;
+  amr_claims: string[] | null;
   acr_claims: string | null;
   id_token_hint: string | null;
   requested_claims: string | null;
