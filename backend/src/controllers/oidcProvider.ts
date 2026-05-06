@@ -27,9 +27,9 @@ type SessionWithState = { aafState?: string; bridgeState?: string };
  */
 function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: BridgeSession): void {
   if (session.aaf_mfa_verified) {
-    userClaims['amr'] = 'mfa';   // step-up completed — single string value required by Entra (AADSTS5001256)
+    userClaims['amr'] = ['mfa'];   // array required by OIDC spec and Entra
   } else if (session.entra_verified) {
-    userClaims['amr'] = 'pwd';   // Entra only, no MFA step-up
+    userClaims['amr'] = ['pwd'];   // array required by OIDC spec and Entra
   } else {
     delete userClaims['amr'];             // incomplete - omit entirely
   }
