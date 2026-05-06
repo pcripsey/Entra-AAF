@@ -27,9 +27,9 @@ type SessionWithState = { aafState?: string; bridgeState?: string };
  */
 function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: BridgeSession): void {
   if (session.aaf_mfa_verified) {
-    userClaims['amr'] = ['mfa', 'aaf'];   // step-up completed
+    userClaims['amr'] = 'mfa';   // step-up completed — single string value required by Entra (AADSTS5001256)
   } else if (session.entra_verified) {
-    userClaims['amr'] = ['pwd'];           // Entra only, no MFA step-up
+    userClaims['amr'] = 'pwd';   // Entra only, no MFA step-up
   } else {
     delete userClaims['amr'];             // incomplete - omit entirely
   }
@@ -594,7 +594,7 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
       res.set('Content-Type', 'text/html; charset=utf-8');
       res.set(
         'Content-Security-Policy',
-        `default-src 'none'; script-src 'nonce-${cspNonce}'; form-action https://login.microsoftonline.com https://login.microsoft.com https://login.microsoftonline.us https://login.chinacloudapi.cn`
+        `default-src 'none'; script-src 'nonce-${cspNonce}'; form-action https://login.microsoftonline.com https://login.microsoft.com https://login.microsoftonline.us https://login.chinacloudapi.cn`,
       );
       res.send(`<!DOCTYPE html>
 <html>
