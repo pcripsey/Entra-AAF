@@ -500,10 +500,12 @@ export async function loginAaf(req: Request, res: Response, next: NextFunction):
     if (bridgeSession.user_claims) {
       try {
         const storedClaims = JSON.parse(bridgeSession.user_claims) as Record<string, unknown>;
-        loginHint =
+        const rawHint =
           (storedClaims['email'] as string | undefined) ||
           (storedClaims['preferred_username'] as string | undefined) ||
           (storedClaims['upn'] as string | undefined);
+        // AAF expects only the local part of the username (before @)
+        loginHint = rawHint?.includes('@') ? rawHint.split('@')[0] : rawHint;
       } catch {
         // Best-effort — do not block the redirect on a claims parse failure
       }

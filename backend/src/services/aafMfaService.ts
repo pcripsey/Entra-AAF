@@ -26,9 +26,11 @@ export function isAafMfaConfigured(): boolean {
  *                     the bridge can correlate the callback.
  * @param callbackUri  The bridge's callback URI that AAF will redirect to
  *                     after MFA (e.g. `{BASE_URL}/callback/aaf`).
- * @param loginHint    Optional email/username hint forwarded to AAF as the
- *                     standard OIDC `login_hint` parameter so that AAF can
- *                     pre-identify the user and skip its username prompt.
+ * @param loginHint    Optional username hint forwarded to AAF as the standard
+ *                     OIDC `login_hint` parameter so that AAF can pre-identify
+ *                     the user and skip its username prompt.  Must be the local
+ *                     part of the username only (i.e. before the `@` sign) —
+ *                     do not pass a full email address.
  */
 export function generateAafMfaAuthorizationUrl(
   bridgeState: string,
