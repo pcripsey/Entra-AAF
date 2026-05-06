@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { config } from '../config';
 import { getJwks } from '../utils/jwks';
 import { createBridgeSession, getBridgeSession, getActiveSessions } from '../services/sessionService';
@@ -589,7 +589,13 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
         ? `<input type="hidden" name="state" value="${escapeHtml(originalState)}" />`
         : '';
 
+      const cspNonce = randomBytes(16).toString('base64url');
+
       res.set('Content-Type', 'text/html; charset=utf-8');
+      res.set(
+        'Content-Security-Policy',
+        `default-src 'none'; script-src 'nonce-${cspNonce}'; form-action https://login.microsoftonline.com https://login.microsoft.com https://login.microsoftonline.us https://login.chinacloudapi.cn`
+      );
       res.send(`<!DOCTYPE html>
 <html>
   <head><title>Redirecting\u2026</title></head>
@@ -600,7 +606,7 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
       ${stateField}
       <noscript><button type="submit">Continue</button></noscript>
     </form>
-    <script>document.getElementById('f').submit();</script>
+    <script nonce="${cspNonce}">document.getElementById('f').submit();</script>
   </body>
 </html>`);
     } else {
