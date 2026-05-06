@@ -150,7 +150,7 @@ Configure AAF to use this bridge as an OIDC provider:
 | `/login/aaf` | GET | Redirects user to AAF for second-factor MFA |
 | `/callback/aaf` | GET | AAF MFA callback; validates MFA completion and issues auth code or id_token |
 | `/callback` | GET | Backward-compatible alias for `/callback/entra` |
-| `/entra-eam` | GET | **EAM entry point**: Entra redirects users here after 1FA; bridge performs AAF MFA and returns id_token to Entra |
+| `/entra-eam` | GET, POST | **EAM entry point**: Entra redirects users here after 1FA; bridge performs AAF MFA and returns id_token to Entra |
 | `/token` | POST | Token endpoint (requires both Entra + AAF MFA when step-up is enabled; validates PKCE `code_verifier` when `code_challenge` was used) |
 | `/userinfo` | GET | UserInfo endpoint |
 | `/health` | GET | Health check |

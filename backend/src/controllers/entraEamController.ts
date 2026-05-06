@@ -10,7 +10,7 @@
  *  1. User authenticates with Entra (password / first factor).
  *  2. Entra's Conditional Access policy requires the External Authentication
  *     Method registered at {BASE_URL}/entra-eam.
- *  3. Entra redirects the user to GET /entra-eam with:
+ *  3. Entra redirects the user to GET /entra-eam (or POSTs via form_post) with:
  *       - client_id   : the bridge's Entra app registration client ID
  *       - redirect_uri: Entra's callback URI (login.microsoftonline.com/…)
  *       - state       : opaque state value from Entra
@@ -65,7 +65,7 @@ function isAllowedEamRedirectUri(uri: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// GET /entra-eam — Entra redirects here after first-factor authentication
+// GET|POST /entra-eam — Entra redirects here after first-factor authentication
 // ---------------------------------------------------------------------------
 
 export async function entraEam(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -77,7 +77,8 @@ export async function entraEam(req: Request, res: Response, next: NextFunction):
       nonce,
       login_hint,
       request: requestJwt,
-    } = req.query as Record<string, string>;
+      id_token_hint,
+    } = { ...req.query, ...(req.body as Record<string, string>) } as Record<string, string>;
 
     const entraConfig = getEntraConfig();
     const expectedClientId = entraConfig.clientId || config.entra.clientId;
@@ -105,13 +106,18 @@ export async function entraEam(req: Request, res: Response, next: NextFunction):
       return;
     }
 
-    // If Entra supplied a signed `request` JWT, verify it before trusting any
-    // user claims it contains.  If verification fails, reject the request so
-    // an unauthenticated caller cannot fabricate an identity.
+    // If Entra supplied a signed `request` JWT or `id_token_hint` (form_post),
+    // verify it before trusting any user claims it contains.  If verification
+    // fails, reject the request so an unauthenticated caller cannot fabricate
+    // an identity.  `request` JWT (GET flow) takes precedence over
+    // `id_token_hint` (form_post flow); both are cryptographically verified
+    // via the same `verifyEntraIdToken` call, so there is no privilege
+    // escalation risk if both are present simultaneously.
     let jwtClaims: Record<string, unknown> | null = null;
-    if (requestJwt) {
+    const jwtToVerify = requestJwt || id_token_hint;
+    if (jwtToVerify) {
       try {
-        jwtClaims = await verifyEntraIdToken(requestJwt);
+        jwtClaims = await verifyEntraIdToken(jwtToVerify);
         logger.debug('[EAM] Entra request JWT verified successfully');
       } catch (err) {
         createAuditLog('entra_eam_rejected', null, `Invalid request JWT: ${String(err)}`, req.ip || null);
