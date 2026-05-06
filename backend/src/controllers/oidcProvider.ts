@@ -586,10 +586,14 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
         const entraTokens = bridgeSession.entra_tokens
           ? JSON.parse(bridgeSession.entra_tokens) as object
           : {};
+        const amrFromAaf = Array.isArray(aafUserInfo['amr'])
+          ? (aafUserInfo['amr'] as unknown[]).filter((v): v is string => typeof v === 'string')
+          : null;
         const existingAmrClaims = bridgeSession.amr_claims
           ? JSON.parse(bridgeSession.amr_claims) as string[]
           : null;
-        updateSessionTokens(bridgeState, entraTokens, mergedClaims, existingAmrClaims, bridgeSession.acr_claims);
+        const finalAmrClaims = (amrFromAaf && amrFromAaf.length > 0) ? amrFromAaf : existingAmrClaims;
+        updateSessionTokens(bridgeState, entraTokens, mergedClaims, finalAmrClaims, bridgeSession.acr_claims);
       }
     }
 
