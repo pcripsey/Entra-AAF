@@ -36,6 +36,10 @@ function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: Br
 
   if (session.acr_claims) {
     userClaims['acr'] = session.acr_claims;
+  } else if (session.aaf_mfa_verified) {
+    // Default ACR for completed AAF MFA — satisfies Entra EAM's
+    // possessionorinherence requirement when no explicit acr was stored.
+    userClaims['acr'] = 'possessionorinherence';
   }
 
   if (session.aaf_mfa_verified) {

@@ -78,6 +78,7 @@ export async function entraEam(req: Request, res: Response, next: NextFunction):
       login_hint,
       request: requestJwt,
       id_token_hint,
+      claims,
     } = { ...req.query, ...(req.body as Record<string, string>) } as Record<string, string>;
 
     const entraConfig = getEntraConfig();
@@ -165,9 +166,26 @@ export async function entraEam(req: Request, res: Response, next: NextFunction):
       setAafOriginalState(bridgeState, entraState);
     }
 
+    // Extract ACR value from Entra's claims request and store it in the session
+    let requestedAcr: string | null = null;
+    if (claims) {
+      try {
+        const parsedClaims = JSON.parse(claims) as Record<string, unknown>;
+        const idTokenClaims = parsedClaims['id_token'] as Record<string, unknown> | undefined;
+        const acrClaim = idTokenClaims?.['acr'] as Record<string, unknown> | undefined;
+        if (acrClaim) {
+          const acrValues = acrClaim['values'] as string[] | undefined;
+          const acrValue = typeof acrClaim['value'] === 'string' ? acrClaim['value'] : undefined;
+          requestedAcr = acrValues?.[0] ?? acrValue ?? null;
+        }
+      } catch (err) {
+        logger.warn(`[EAM] Failed to parse claims parameter; acr will use default: ${String(err)}`);
+      }
+    }
+
     // Mark the session as Entra-verified (Entra already performed 1FA)
-    if (Object.keys(userClaims).length > 0) {
-      updateSessionTokens(bridgeState, {}, userClaims, null, null);
+    if (Object.keys(userClaims).length > 0 || requestedAcr) {
+      updateSessionTokens(bridgeState, {}, userClaims, null, requestedAcr);
     }
     markEntraVerified(bridgeState);
     markBridgeSessionEntraInitiated(bridgeState, entraState || null);
