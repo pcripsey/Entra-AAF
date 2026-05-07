@@ -19,10 +19,12 @@ const FILTER_ACTIONS: Record<FilterCategory, string[]> = {
     'authorize_request', 'authorize_rejected',
     'token_issued', 'token_request_failed',
     'userinfo_failed',
+    'aaf_mfa_success', 'aaf_mfa_failure', 'aaf_mfa_initiated',
+    'entra_eam_initiated',
   ],
   failures: [
     'authentication_failure', 'authorize_rejected', 'token_request_failed',
-    'userinfo_failed', 'admin_login_failed', 'system_error',
+    'userinfo_failed', 'admin_login_failed', 'system_error', 'aaf_mfa_failure',
   ],
   admin: [
     'admin_login', 'admin_login_failed', 'admin_logout',
@@ -34,7 +36,14 @@ const FILTER_ACTIONS: Record<FilterCategory, string[]> = {
 const FAILURE_ACTIONS = new Set(FILTER_ACTIONS.failures);
 const SUCCESS_ACTIONS = new Set([
   'authentication_success', 'authorize_request', 'token_issued', 'admin_login',
+  'aaf_mfa_success', 'entra_eam_initiated',
 ]);
+
+function parseAmrFromAafDetails(log: AuditLog): string | null {
+  if (log.action !== 'aaf_mfa_success' || !log.details) return null;
+  const match = /;\s*amr:\s*([^\s;]+)/.exec(log.details);
+  return match ? match[1] : null;
+}
 
 function getActionBadge(action: string): BadgeVariant {
   if (FAILURE_ACTIONS.has(action)) return 'error';
@@ -77,6 +86,16 @@ const columns: TableColumn<AuditLog>[] = [
     key: 'ip_address',
     header: 'IP Address',
     render: (log) => log.ip_address ?? '—',
+  },
+  {
+    key: 'aaf_method',
+    header: 'AAF Method',
+    render: (log) => {
+      const amr = parseAmrFromAafDetails(log);
+      return amr
+        ? <code style={{ fontFamily: 'monospace', fontSize: '0.85em' }}>{amr}</code>
+        : '—';
+    },
   },
   {
     key: 'details',
