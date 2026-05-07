@@ -140,6 +140,11 @@ export function getSessions(req: Request, res: Response): void {
         amr_claims = null;
       }
     }
+    // Apply the same fallback as enrichClaimsWithStepUp so the column
+    // reflects what was actually issued even when AAF's userinfo omits amr.
+    if (s.aaf_mfa_verified && (!amr_claims || amr_claims.length === 0)) {
+      amr_claims = ['swk'];
+    }
 
     if (s.aaf_mfa_verified) {
       logger.info(`[AAF METHOD] session: ${s.state} amr: ${JSON.stringify(amr_claims)}`);
