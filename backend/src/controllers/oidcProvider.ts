@@ -497,9 +497,15 @@ export async function loginAaf(req: Request, res: Response, next: NextFunction):
     // Extract the user's email from the already-verified Entra claims so that
     // AAF can pre-fill (or skip) its username prompt via login_hint.
     let loginHint: string | undefined;
+    let userIdentifier: string | null = null;
     if (bridgeSession.user_claims) {
       try {
         const storedClaims = JSON.parse(bridgeSession.user_claims) as Record<string, unknown>;
+        userIdentifier =
+          (storedClaims['preferred_username'] as string | undefined) ||
+          (storedClaims['upn'] as string | undefined) ||
+          (storedClaims['email'] as string | undefined) ||
+          null;
         const rawHint =
           (storedClaims['email'] as string | undefined) ||
           (storedClaims['preferred_username'] as string | undefined) ||
@@ -513,7 +519,7 @@ export async function loginAaf(req: Request, res: Response, next: NextFunction):
 
     const aafMfaUrl = generateAafMfaAuthorizationUrl(bridgeState, callbackUri, bridgeSession.requested_claims, loginHint);
 
-    createAuditLog('aaf_mfa_initiated', null, `bridgeState: ${bridgeState}`, req.ip || null);
+    createAuditLog('aaf_mfa_initiated', userIdentifier, `bridgeState: ${bridgeState}`, req.ip || null);
 
     res.redirect(aafMfaUrl);
   } catch (err) {
@@ -606,14 +612,19 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
       ? JSON.parse(finalSession.user_claims) as Record<string, unknown>
       : {};
     enrichClaimsWithStepUp(finalClaims, finalSession);
+    const userIdentifier =
+      (finalClaims['preferred_username'] as string | undefined) ||
+      (finalClaims['upn'] as string | undefined) ||
+      (finalClaims['email'] as string | undefined) ||
+      null;
 
     const sess = (req.session as unknown) as SessionWithState;
     const originalState = sess.aafState || bridgeSession.aaf_original_state || bridgeState;
     const redirectUri = bridgeSession.aaf_redirect_uri || config.aaf.redirectUris[0];
 
     const amrString = finalAmrClaims && finalAmrClaims.length > 0 ? finalAmrClaims.join(',') : 'unknown';
-    createAuditLog('aaf_mfa_success', null, `bridgeState: ${bridgeState}; amr: ${amrString}`, req.ip || null);
-    createAuditLog('authentication_success', null, `Step-up complete for bridgeState: ${bridgeState}`, req.ip || null);
+    createAuditLog('aaf_mfa_success', userIdentifier, `bridgeState: ${bridgeState}; amr: ${amrString}`, req.ip || null);
+    createAuditLog('authentication_success', userIdentifier, `Step-up complete for bridgeState: ${bridgeState}`, req.ip || null);
 
     if (bridgeSession.is_entra_initiated) {
       // -----------------------------------------------------------------------
