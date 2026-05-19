@@ -15,8 +15,14 @@ export function generateAuthCode(sessionState: string): string {
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
   db.prepare('INSERT INTO auth_codes (code, session_state, expires_at) VALUES (?, ?, ?)').run(code, sessionState, expiresAt);
   // Opportunistically clean up expired codes
-  db.prepare('DELETE FROM auth_codes WHERE expires_at < ?').run(new Date().toISOString());
+  cleanupExpiredAuthCodes();
   return code;
+}
+
+export function cleanupExpiredAuthCodes(): number {
+  const db = getDb();
+  const result = db.prepare('DELETE FROM auth_codes WHERE expires_at < ?').run(new Date().toISOString());
+  return result.changes;
 }
 
 export function validateAuthCode(code: string): string | null {
