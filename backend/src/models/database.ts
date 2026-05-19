@@ -6,7 +6,9 @@ import { logger } from '../utils/logger';
 
 let db: Database.Database;
 
-export function initializeDatabase(): void {
+function openDatabaseConnection(): void {
+  if (db) return;
+
   const dbPath = path.resolve(config.dbPath);
   const dbDir = path.dirname(dbPath);
   if (!fs.existsSync(dbDir)) {
@@ -16,6 +18,18 @@ export function initializeDatabase(): void {
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+  db.pragma('cache_size = -64000');
+  db.pragma('synchronous = NORMAL');
+  db.pragma('temp_store = MEMORY');
+  db.pragma('mmap_size = 268435456');
+}
+
+export function connectDatabase(): void {
+  openDatabaseConnection();
+}
+
+export function initializeDatabase(): void {
+  openDatabaseConnection();
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS sessions (
@@ -62,6 +76,11 @@ export function initializeDatabase(): void {
       session_state TEXT NOT NULL,
       expires_at TEXT NOT NULL
     );
+
+    CREATE INDEX IF NOT EXISTS idx_sessions_state ON sessions(state);
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_auth_codes_expires_at ON auth_codes(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
   `);
 
   // Migrate existing databases by adding new columns if they don't exist

@@ -1,9 +1,18 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+const parseIntEnv = (value: string | undefined, fallback: number): number => {
+  const parsed = value ? parseInt(value, 10) : NaN;
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
+  clusterEnabled: process.env.CLUSTER_ENABLED === 'true',
+  cleanupIntervalMs: parseIntEnv(process.env.CLEANUP_INTERVAL_MS, 300000),
+  rateLimitWindowMs: parseIntEnv(process.env.RATE_LIMIT_WINDOW_MS, 60 * 1000),
+  rateLimitMax: parseIntEnv(process.env.RATE_LIMIT_MAX, 200),
   sessionSecret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
   baseUrl: process.env.BASE_URL || 'http://localhost:3001',
   adminUsername: process.env.ADMIN_USERNAME || 'admin',

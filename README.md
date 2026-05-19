@@ -104,6 +104,10 @@ Open http://localhost (frontend) and login with your configured admin credential
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `BASE_URL` | Public URL of the bridge | required |
+| `CLUSTER_ENABLED` | Enable Node.js clustering (`true` forks one worker per CPU core) | `false` |
+| `CLEANUP_INTERVAL_MS` | Interval for expired session/auth-code cleanup job | `300000` |
+| `RATE_LIMIT_WINDOW_MS` | OIDC rate-limit window in milliseconds | `60000` |
+| `RATE_LIMIT_MAX` | OIDC rate-limit max requests per IP per window | `200` |
 | `SESSION_SECRET` | Session encryption secret | required |
 | `ADMIN_USERNAME` | Admin UI username | `admin` |
 | `ADMIN_PASSWORD` | Admin UI password | required |
@@ -188,6 +192,14 @@ cd frontend
 npm install
 npm start
 ```
+
+## Scalability Notes
+
+- Set `CLUSTER_ENABLED=true` to run one Node.js worker per CPU core. The primary process initializes the database once and workers serve traffic.
+- OIDC routes (`/`) are protected by configurable rate limits using `RATE_LIMIT_WINDOW_MS` and `RATE_LIMIT_MAX`. Admin APIs (`/api/admin`) are limited to 60 requests/minute/IP.
+- Expired bridge sessions and authorization codes are cleaned automatically every `CLEANUP_INTERVAL_MS` milliseconds (default 5 minutes).
+- For production (500+ concurrent users), run behind a reverse proxy (nginx/Caddy) for TLS termination and connection handling.
+- SQLite with WAL mode is suitable for ~500 concurrent users on a single node. For higher scale or multi-node deployments, migrate to PostgreSQL.
 
 ## Security Notes
 
