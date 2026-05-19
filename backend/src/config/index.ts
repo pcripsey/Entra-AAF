@@ -2,7 +2,11 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const parseIntEnv = (value: string | undefined, fallback: number): number => {
-  const parsed = value ? parseInt(value, 10) : NaN;
+  const normalized = value?.trim();
+  if (!normalized || !/^-?\d+$/.test(normalized)) {
+    return fallback;
+  }
+  const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 

@@ -22,6 +22,7 @@ function openDatabaseConnection(): void {
   db.pragma('cache_size = -64000');
   db.pragma('synchronous = NORMAL');
   db.pragma('temp_store = MEMORY');
+  // 268435456 bytes = 256MB for memory-mapped I/O.
   db.pragma('mmap_size = 268435456');
 }
 
