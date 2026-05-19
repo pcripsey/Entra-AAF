@@ -136,9 +136,9 @@ async function startSingleProcess() {
   await startWorker();
 }
 
-const start = config.clusterEnabled ? startClustered : startSingleProcess;
+const startFunction = config.clusterEnabled ? startClustered : startSingleProcess;
 
-Promise.resolve(start()).catch((err: Error) => {
+Promise.resolve(startFunction()).catch((err: Error) => {
   logger.error(`Failed to start: ${err.message}`);
   process.exit(1);
 });
