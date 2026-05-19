@@ -18,7 +18,7 @@ function openDatabaseConnection(): void {
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
-  // Negative value is KiB units, so -64000 sets a 64MB page cache.
+  // Negative value is KiB units, so -64000 sets an approximately 64MB page cache.
   db.pragma('cache_size = -64000');
   db.pragma('synchronous = NORMAL');
   db.pragma('temp_store = MEMORY');

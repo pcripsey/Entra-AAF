@@ -1,22 +1,28 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-const parseIntegerEnv = (value: string | undefined, fallback: number): number => {
+const parseIntegerEnv = (value: string | undefined, fallback: number, minValue?: number): number => {
   const normalized = value?.trim();
   if (!normalized || !/^-?\d+$/.test(normalized)) {
     return fallback;
   }
   const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : fallback;
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  if (minValue !== undefined && parsed < minValue) {
+    return fallback;
+  }
+  return parsed;
 };
 
 export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   clusterEnabled: process.env.CLUSTER_ENABLED === 'true',
-  cleanupIntervalMs: parseIntegerEnv(process.env.CLEANUP_INTERVAL_MS, 300000),
-  rateLimitWindowMs: parseIntegerEnv(process.env.RATE_LIMIT_WINDOW_MS, 60 * 1000),
-  rateLimitMax: parseIntegerEnv(process.env.RATE_LIMIT_MAX, 200),
+  cleanupIntervalMs: parseIntegerEnv(process.env.CLEANUP_INTERVAL_MS, 300000, 1),
+  rateLimitWindowMs: parseIntegerEnv(process.env.RATE_LIMIT_WINDOW_MS, 60 * 1000, 1),
+  rateLimitMax: parseIntegerEnv(process.env.RATE_LIMIT_MAX, 200, 1),
   sessionSecret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
   baseUrl: process.env.BASE_URL || 'http://localhost:3001',
   adminUsername: process.env.ADMIN_USERNAME || 'admin',
