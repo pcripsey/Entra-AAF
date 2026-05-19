@@ -49,6 +49,7 @@ const sessionStore = new SQLiteStore({
   dir: resolvedDbDir,
   table: 'express_sessions',
 }) as unknown as session.Store;
+let cleanupTimer: NodeJS.Timeout | null = null;
 
 app.set('trust proxy', 1);
 app.use(helmet());
@@ -92,7 +93,9 @@ app.get('/health', (_req, res) => {
 app.use(errorHandler);
 
 function startCleanupJob(): void {
-  setInterval(() => {
+  if (cleanupTimer) return;
+
+  cleanupTimer = setInterval(() => {
     const removedSessions = cleanupExpiredSessions();
     const removedAuthCodes = cleanupExpiredAuthCodes();
     logger.debug(`Cleanup job removed ${removedSessions} expired sessions and ${removedAuthCodes} expired auth codes.`);
