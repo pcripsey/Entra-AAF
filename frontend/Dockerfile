@@ -2,7 +2,6 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --legacy-peer-deps
-COPY tsconfig.json ./
 COPY public ./public
 COPY src ./src
 ENV REACT_APP_API_URL=/api
