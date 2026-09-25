@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 type LocationBlock = {
   modifier: '' | '=' | '^~' | '~';
@@ -9,7 +10,7 @@ type LocationBlock = {
   body: string;
 };
 
-const repoRoot = path.resolve(__dirname, '../../..');
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const nginxConfPath = path.join(repoRoot, 'frontend/nginx.conf');
 const dockerfilePath = path.join(repoRoot, 'frontend/Dockerfile');
 
