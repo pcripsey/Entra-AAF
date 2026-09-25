@@ -1,5 +1,5 @@
 import { Issuer, Client, TokenSet } from 'openid-client';
-import { compactVerify, createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
+import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import { getEntraConfig } from '../models/config';
 import { config } from '../config';
 import { logger } from '../utils/logger';
@@ -8,7 +8,7 @@ import { logEntraOutbound, sanitizeObject } from '../middleware/outboundLogger';
 let cachedClient: Client | null = null;
 let cachedTenantId = '';
 
-type JwtVerificationKey = Parameters<typeof compactVerify>[1];
+type JwtVerificationKey = Parameters<typeof jwtVerify>[1];
 
 interface EntraJwtVerificationContext {
   clientId: string;
@@ -27,25 +27,6 @@ function parseNumericDateClaim(payload: Record<string, unknown>, claim: 'iat' | 
     return null;
   }
   return value;
-}
-
-function validateJwtAudience(payload: Record<string, unknown>, expectedAudience: string): void {
-  const aud = payload['aud'];
-  if (typeof aud === 'string') {
-    if (aud !== expectedAudience) {
-      throw new Error('JWT audience claim mismatch');
-    }
-    return;
-  }
-
-  if (Array.isArray(aud) && aud.every((value): value is string => typeof value === 'string')) {
-    if (!aud.includes(expectedAudience)) {
-      throw new Error('JWT audience claim mismatch');
-    }
-    return;
-  }
-
-  throw new Error('JWT audience claim is missing or invalid');
 }
 
 function validateStringClaim(payload: Record<string, unknown>, claim: string): string {
@@ -226,18 +207,24 @@ export async function verifyEntraEamRequestToken(
 ): Promise<Record<string, unknown>> {
   const context = overrides?.context ?? await getEntraJwtVerificationContext();
   const currentDate = overrides?.currentDate ?? new Date();
+  const decodedPayload = decodeJwt(token) as Record<string, unknown>;
+  const expFromDecodedToken = parseNumericDateClaim(decodedPayload, 'exp');
 
-  await compactVerify(token, context.jwks, {
-    algorithms: ['RS256'],
-  });
-
-  const payload = decodeJwt(token) as Record<string, unknown>;
-
-  if (payload['iss'] !== context.expectedIssuer) {
-    throw new Error('JWT issuer claim mismatch');
+  if (expFromDecodedToken === null) {
+    throw new Error('JWT missing required exp claim');
   }
 
-  validateJwtAudience(payload, context.clientId);
+  const verificationDate = expFromDecodedToken < Math.floor(currentDate.getTime() / 1000)
+    ? new Date(expFromDecodedToken * 1000)
+    : currentDate;
+
+  const { payload } = await jwtVerify(token, context.jwks, {
+    algorithms: ['RS256'],
+    issuer: context.expectedIssuer,
+    audience: context.clientId,
+    clockTolerance: 60,
+    currentDate: verificationDate,
+  });
 
   const iat = parseNumericDateClaim(payload, 'iat');
   if (iat === null) {
@@ -266,10 +253,7 @@ export async function verifyEntraEamRequestToken(
     throw new Error('JWT nbf claim is in the future');
   }
 
-  const exp = parseNumericDateClaim(payload, 'exp');
-  if (exp === null) {
-    throw new Error('JWT missing required exp claim');
-  }
+  const exp = expFromDecodedToken;
 
   if (exp < iat) {
     throw new Error('JWT exp claim predates iat');

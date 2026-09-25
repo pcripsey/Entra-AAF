@@ -146,11 +146,11 @@ test('verifyEntraEamRequestToken rejects the wrong audience or issuer', async ()
 
   await assert.rejects(
     () => verifyEntraEamRequestToken(wrongAudienceToken, { context }),
-    /audience claim mismatch/,
+    /aud|audience/,
   );
   await assert.rejects(
     () => verifyEntraEamRequestToken(wrongIssuerToken, { context }),
-    /issuer claim mismatch/,
+    /iss|issuer/,
   );
 });
 
@@ -195,7 +195,7 @@ test('verifyEntraEamRequestToken rejects a token whose nbf is in the future', as
 
   await assert.rejects(
     () => verifyEntraEamRequestToken(token, { context }),
-    /nbf claim is in the future/,
+    /nbf/,
   );
 });
 
