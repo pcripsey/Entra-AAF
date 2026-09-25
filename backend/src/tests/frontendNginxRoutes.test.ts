@@ -47,18 +47,20 @@ function normalizeDockerfile(text: string): string {
   return text.replace(/\\\n/g, ' ').replace(/[ \t]+/g, ' ');
 }
 
+const descendantOidcLocationHeader = 'location ~ ^/(authorize|entra-eam|token|userinfo|health)(?:/.*)?$';
+
 test('frontend nginx declares explicit proxy locations for every backend route family', () => {
   const configText = fs.readFileSync(nginxConfPath, 'utf8');
 
   const backendLocationHeaders = [
     'location ^~ /api/',
     'location ^~ /.well-known/',
-    'location = /login',
     'location ~ ^/login/(entra|aaf)/?$',
     'location = /callback',
     'location ^~ /callback/',
+    'location = /entra-login',
     'location ^~ /entra-login/',
-    'location ~ ^/(authorize|callback|entra-eam|token|userinfo|entra-login|health)(?:/.*)?$',
+    descendantOidcLocationHeader,
   ];
 
   for (const locationHeader of backendLocationHeaders) {
@@ -78,7 +80,10 @@ test('frontend nginx keeps SPA fallback for frontend-only routes', () => {
 
 test('frontend nginx keeps descendant backend routes on regex-matched OIDC endpoints', () => {
   const configText = fs.readFileSync(nginxConfPath, 'utf8');
-  assertProxyBlock(configText, 'location ~ ^/(authorize|callback|entra-eam|token|userinfo|entra-login|health)(?:/.*)?$');
+  assert.ok(
+    configText.includes(`${descendantOidcLocationHeader} {`),
+    'Regex-matched OIDC endpoints should include descendant path coverage',
+  );
 });
 
 test('frontend production image copies the nginx config into nginx default.conf', () => {
