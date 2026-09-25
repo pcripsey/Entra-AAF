@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAttributeMappings, updateAttributeMappings } from '../services/api';
+import { getApiErrorMessage, getAttributeMappings, updateAttributeMappings } from '../services/api';
 import { AttributeMapping } from '../types';
 import EditableSelect from '../components/EditableSelect';
 import Card from '../components/common/Card';
@@ -58,8 +58,8 @@ export default function AttributeMappingPage() {
     try {
       await updateAttributeMappings(mappings);
       setMsg('Attribute mappings saved successfully.');
-    } catch {
-      setErr('Failed to save mappings. Please try again.');
+    } catch (err) {
+      setErr(getApiErrorMessage(err, 'Failed to save mappings. Please try again.'));
     } finally {
       setLoading(false);
     }

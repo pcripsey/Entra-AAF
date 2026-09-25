@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getEntraConfig, updateEntraConfig } from '../services/api';
+import { getApiErrorMessage, getEntraConfig, updateEntraConfig } from '../services/api';
 import { EntraConfig } from '../types';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
@@ -29,8 +29,8 @@ export default function EntraConfigPage() {
     try {
       await updateEntraConfig(form);
       setMsg('Entra ID configuration saved successfully.');
-    } catch {
-      setErr('Failed to save configuration. Please try again.');
+    } catch (err) {
+      setErr(getApiErrorMessage(err, 'Failed to save configuration. Please try again.'));
     } finally {
       setLoading(false);
     }

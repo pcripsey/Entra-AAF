@@ -214,6 +214,14 @@ npm start
 - PKCE (RFC 7636) is supported: include `code_challenge` / `code_challenge_method=S256` in `/authorize` and `code_verifier` in `/token`
 - State tokens are correlated by UUID — single-use authorization codes expire after 5 minutes
 - Admin console uses local session authentication, completely isolated from Entra/AAF flows
+- Admin API writes require a session-bound CSRF token from `GET /api/admin/csrf-token`, sent back in the `X-CSRF-Token` header on every `POST`/`PUT` request
+- Admin API writes also validate the browser `Origin` (or `Referer`) against the trusted admin/frontend origins before accepting the request
 - EAM endpoint validates `client_id` and `redirect_uri`; optionally validates an Entra-signed `request` JWT for cryptographic proof of origin
 - EAM `redirect_uri` requires HTTPS and only allows Microsoft login domains or exact trusted HTTPS allowlist entries
 - AAF MFA authorize/token/userinfo endpoints must use HTTPS
+
+## Admin API CSRF Contract
+
+- Fetch a CSRF token from `GET /api/admin/csrf-token` before calling any mutating admin endpoint.
+- Send the returned token in the `X-CSRF-Token` header on admin `POST` and `PUT` requests, including `/api/admin/login` and `/api/admin/logout`.
+- CSRF validation is scoped only to `/api/admin`; OIDC bridge routes such as `/authorize`, `/callback/*`, `/entra-eam`, `/token`, and `/userinfo` are unaffected.
