@@ -32,6 +32,7 @@ services:
       - AAF_MFA_CLIENT_SECRET=${AAF_MFA_CLIENT_SECRET}
       # Entra EAM (External Authentication Method) — optional allow-list
       - ENTRA_EAM_ALLOWED_REDIRECT_URIS=${ENTRA_EAM_ALLOWED_REDIRECT_URIS}
+      - ENTRA_EAM_MAX_TOKEN_AGE_SECONDS=${ENTRA_EAM_MAX_TOKEN_AGE_SECONDS}
     volumes:
       - backend-data:/data
       - backend-keys:/app/keys
