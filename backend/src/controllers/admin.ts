@@ -230,21 +230,36 @@ export function updateAafMfaConfigController(req: Request, res: Response): void 
     clientId: string;
     clientSecret: string;
   };
+  const normalizedAuthorizeEndpoint = authorizeEndpoint?.trim() || '';
+  const normalizedTokenEndpoint = tokenEndpoint?.trim() || '';
+  const normalizedUserInfoEndpoint = userInfoEndpoint?.trim() || '';
+  const normalizedClientId = clientId?.trim() || '';
+  const normalizedClientSecret = clientSecret || '';
 
-  if (authorizeEndpoint && !isHttpsUrl(authorizeEndpoint)) {
+  if (normalizedAuthorizeEndpoint && !isHttpsUrl(normalizedAuthorizeEndpoint)) {
     res.status(400).json({ error: 'authorizeEndpoint must be a valid https URL.' });
     return;
   }
-  if (tokenEndpoint && !isHttpsUrl(tokenEndpoint)) {
+  if (normalizedTokenEndpoint && !isHttpsUrl(normalizedTokenEndpoint)) {
     res.status(400).json({ error: 'tokenEndpoint must be a valid https URL.' });
     return;
   }
-  if (userInfoEndpoint && !isHttpsUrl(userInfoEndpoint)) {
+  if (normalizedUserInfoEndpoint && !isHttpsUrl(normalizedUserInfoEndpoint)) {
     res.status(400).json({ error: 'userInfoEndpoint must be a valid https URL.' });
     return;
   }
+  if (!normalizedAuthorizeEndpoint && (normalizedTokenEndpoint || normalizedUserInfoEndpoint)) {
+    res.status(400).json({ error: 'authorizeEndpoint is required when tokenEndpoint or userInfoEndpoint is configured.' });
+    return;
+  }
 
-  setAafMfaConfig(authorizeEndpoint, tokenEndpoint, userInfoEndpoint, clientId, clientSecret);
+  setAafMfaConfig(
+    normalizedAuthorizeEndpoint,
+    normalizedTokenEndpoint,
+    normalizedUserInfoEndpoint,
+    normalizedClientId,
+    normalizedClientSecret
+  );
   const sess = (req.session as unknown) as AdminSession;
   createAuditLog('aaf_mfa_config_updated', sess.username || 'admin', null, req.ip || null);
   res.json({ success: true });

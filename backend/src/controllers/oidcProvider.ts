@@ -633,6 +633,15 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
       res.status(400).json({ error: 'invalid_request', error_description: 'redirect_uri is invalid' });
       return;
     }
+    if (!bridgeSession.is_entra_initiated) {
+      const aafConfig = getAafConfig();
+      const allowedAafRedirectUris = aafConfig.redirectUris.length ? aafConfig.redirectUris : config.aaf.redirectUris;
+      if (!allowedAafRedirectUris.includes(redirectUri)) {
+        createAuditLog('aaf_mfa_failed', userIdentifier, `Untrusted redirect URI blocked for bridgeState: ${bridgeState}`, req.ip || null);
+        res.status(400).json({ error: 'invalid_request', error_description: 'redirect_uri is not allowed' });
+        return;
+      }
+    }
 
     const amrString = finalAmrClaims && finalAmrClaims.length > 0 ? finalAmrClaims.join(',') : 'unknown';
     createAuditLog('aaf_mfa_success', userIdentifier, `bridgeState: ${bridgeState}; amr: ${amrString}`, req.ip || null);

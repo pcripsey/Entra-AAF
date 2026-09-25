@@ -44,32 +44,34 @@ import { isAafMfaConfigured } from '../services/aafMfaService';
 import { createAuditLog } from '../models/auditLog';
 import { logger } from '../utils/logger';
 
+const normalizedAllowedEamRedirectUris = config.entraEam.allowedRedirectUris.map((allowedUri) => {
+  let parsed: URL;
+  try {
+    parsed = new URL(allowedUri);
+  } catch {
+    throw new Error(`[EAM] ENTRA_EAM_ALLOWED_REDIRECT_URIS contains an invalid URL: ${allowedUri}`);
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`[EAM] ENTRA_EAM_ALLOWED_REDIRECT_URIS must use HTTPS: ${allowedUri}`);
+  }
+  return parsed.toString();
+});
+
 /**
  * Validates that the supplied redirect_uri is trustworthy for the EAM flow.
  * It must either be in the explicit allow-list (ENTRA_EAM_ALLOWED_REDIRECT_URIS)
  * or originate from an official Microsoft login domain, and must use HTTPS.
  */
 function isAllowedEamRedirectUri(uri: string): boolean {
-  const explicit = config.entraEam.allowedRedirectUris;
   try {
     const parsedUri = new URL(uri);
     if (parsedUri.protocol !== 'https:') {
       return false;
     }
 
-    if (explicit.length > 0) {
+    if (normalizedAllowedEamRedirectUris.length > 0) {
       const normalizedCandidate = parsedUri.toString();
-      const hasExplicitMatch = explicit.some((allowedUri) => {
-        try {
-          const parsedAllowedUri = new URL(allowedUri);
-          return parsedAllowedUri.protocol === 'https:' && parsedAllowedUri.toString() === normalizedCandidate;
-        } catch {
-          return false;
-        }
-      });
-      if (hasExplicitMatch) {
-        return true;
-      }
+      return normalizedAllowedEamRedirectUris.includes(normalizedCandidate);
     }
 
     const { hostname } = parsedUri;
