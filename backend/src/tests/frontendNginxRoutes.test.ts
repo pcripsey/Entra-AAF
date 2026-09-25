@@ -27,6 +27,10 @@ function assertProxyBlock(configText: string, locationHeader: string): void {
   assert.match(block, /proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;/, `${locationHeader} should append X-Forwarded-For`);
 }
 
+function normalizeDockerfile(text: string): string {
+  return text.replace(/\\\n/g, ' ').replace(/[ \t]+/g, ' ');
+}
+
 test('frontend nginx declares explicit proxy locations for every backend route family', () => {
   const configText = fs.readFileSync(nginxConfPath, 'utf8');
 
@@ -35,6 +39,7 @@ test('frontend nginx declares explicit proxy locations for every backend route f
     'location ^~ /.well-known/',
     'location ^~ /login/',
     'location ^~ /callback/',
+    'location ^~ /entra-login/',
     'location ~ ^/(authorize|callback|entra-eam|token|userinfo|entra-login|health)/?$',
   ];
 
@@ -55,7 +60,11 @@ test('frontend nginx keeps SPA fallback for frontend-only routes', () => {
 });
 
 test('frontend production image copies the nginx config into nginx default.conf', () => {
-  const dockerfileText = fs.readFileSync(dockerfilePath, 'utf8');
+  const dockerfileText = normalizeDockerfile(fs.readFileSync(dockerfilePath, 'utf8'));
 
-  assert.match(dockerfileText, /COPY nginx\.conf \/etc\/nginx\/conf\.d\/default\.conf/, 'Frontend image must ship the updated nginx config');
+  assert.match(
+    dockerfileText,
+    /COPY (?:--from=\S+ )?\S*nginx\.conf \/etc\/nginx\/conf\.d\/default\.conf(?:\s|$)/,
+    'Frontend image must ship the updated nginx config',
+  );
 });
