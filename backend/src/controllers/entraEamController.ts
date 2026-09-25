@@ -28,6 +28,7 @@
  *  - The client_id parameter must match the configured Entra client ID.
  *  - The redirect_uri must either be in ENTRA_EAM_ALLOWED_REDIRECT_URIS or
  *    originate from login.microsoftonline.com / login.microsoft.com.
+ *  - All redirect URIs must use HTTPS.
  *  - When Entra supplies a `request` JWT it is cryptographically verified
  *    against Entra's JWKS before any session is created.
  */
@@ -43,16 +44,37 @@ import { isAafMfaConfigured } from '../services/aafMfaService';
 import { createAuditLog } from '../models/auditLog';
 import { logger } from '../utils/logger';
 
+const normalizedAllowedEamRedirectUris = config.entraEam.allowedRedirectUris.map((allowedUri) => {
+  let parsed: URL;
+  try {
+    parsed = new URL(allowedUri);
+  } catch {
+    throw new Error(`[EAM] ENTRA_EAM_ALLOWED_REDIRECT_URIS contains an invalid URL: ${allowedUri}`);
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`[EAM] ENTRA_EAM_ALLOWED_REDIRECT_URIS must use HTTPS: ${allowedUri}`);
+  }
+  return parsed.toString();
+});
+
 /**
  * Validates that the supplied redirect_uri is trustworthy for the EAM flow.
  * It must either be in the explicit allow-list (ENTRA_EAM_ALLOWED_REDIRECT_URIS)
- * or originate from an official Microsoft login domain.
+ * or originate from an official Microsoft login domain, and must use HTTPS.
  */
 function isAllowedEamRedirectUri(uri: string): boolean {
-  const explicit = config.entraEam.allowedRedirectUris;
-  if (explicit.length > 0 && explicit.includes(uri)) return true;
   try {
-    const { hostname } = new URL(uri);
+    const parsedUri = new URL(uri);
+    if (parsedUri.protocol !== 'https:') {
+      return false;
+    }
+
+    if (normalizedAllowedEamRedirectUris.length > 0) {
+      const normalizedCandidate = parsedUri.toString();
+      return normalizedAllowedEamRedirectUris.includes(normalizedCandidate);
+    }
+
+    const { hostname } = parsedUri;
     return (
       hostname === 'login.microsoftonline.com' ||
       hostname === 'login.microsoft.com' ||

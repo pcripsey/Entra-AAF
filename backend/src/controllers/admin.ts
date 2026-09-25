@@ -14,6 +14,15 @@ const startTime = Date.now();
 
 type AdminSession = { authenticated?: boolean; username?: string };
 
+function isHttpsUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export function login(req: Request, res: Response): void {
   const { username, password } = req.body as { username: string; password: string };
 
@@ -221,7 +230,36 @@ export function updateAafMfaConfigController(req: Request, res: Response): void 
     clientId: string;
     clientSecret: string;
   };
-  setAafMfaConfig(authorizeEndpoint, tokenEndpoint, userInfoEndpoint, clientId, clientSecret);
+  const normalizedAuthorizeEndpoint = authorizeEndpoint?.trim() || '';
+  const normalizedTokenEndpoint = tokenEndpoint?.trim() || '';
+  const normalizedUserInfoEndpoint = userInfoEndpoint?.trim() || '';
+  const normalizedClientId = clientId?.trim() || '';
+  const normalizedClientSecret = clientSecret || '';
+
+  if (normalizedAuthorizeEndpoint && !isHttpsUrl(normalizedAuthorizeEndpoint)) {
+    res.status(400).json({ error: 'authorizeEndpoint must be a valid https URL.' });
+    return;
+  }
+  if (normalizedTokenEndpoint && !isHttpsUrl(normalizedTokenEndpoint)) {
+    res.status(400).json({ error: 'tokenEndpoint must be a valid https URL.' });
+    return;
+  }
+  if (normalizedUserInfoEndpoint && !isHttpsUrl(normalizedUserInfoEndpoint)) {
+    res.status(400).json({ error: 'userInfoEndpoint must be a valid https URL.' });
+    return;
+  }
+  if (!normalizedAuthorizeEndpoint && (normalizedTokenEndpoint || normalizedUserInfoEndpoint)) {
+    res.status(400).json({ error: 'authorizeEndpoint is required when tokenEndpoint or userInfoEndpoint is configured.' });
+    return;
+  }
+
+  setAafMfaConfig(
+    normalizedAuthorizeEndpoint,
+    normalizedTokenEndpoint,
+    normalizedUserInfoEndpoint,
+    normalizedClientId,
+    normalizedClientSecret
+  );
   const sess = (req.session as unknown) as AdminSession;
   createAuditLog('aaf_mfa_config_updated', sess.username || 'admin', null, req.ip || null);
   res.json({ success: true });

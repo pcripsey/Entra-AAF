@@ -75,9 +75,11 @@ app.use(
     resave: false,
     saveUninitialized: false,
     rolling: true,
+    proxy: config.nodeEnv === 'production',
     cookie: {
       secure: config.cookieSecure,
       httpOnly: true,
+      sameSite: config.cookieSecure ? 'none' : 'lax',
       maxAge: 10 * 60 * 1000,
     },
   })

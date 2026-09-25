@@ -3,6 +3,19 @@ import { getAafMfaConfig } from '../models/config';
 import { logger } from '../utils/logger';
 import { logOutboundRequest } from '../middleware/outboundLogger';
 
+function getValidatedHttpsEndpoint(rawEndpoint: string, fieldName: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawEndpoint);
+  } catch {
+    throw new Error(`Invalid ${fieldName}: not a valid URL`);
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`Invalid ${fieldName}: https is required`);
+  }
+  return parsed.toString();
+}
+
 /**
  * Returns true when the AAF MFA step-up flow is configured.
  * Step-up is enabled when an AAF authorize endpoint is set either via the
@@ -47,7 +60,7 @@ export function generateAafMfaAuthorizationUrl(
     throw new Error('AAF MFA authorize endpoint is not configured');
   }
 
-  const url = new URL(authorizeEndpoint);
+  const url = new URL(getValidatedHttpsEndpoint(authorizeEndpoint, 'authorize endpoint'));
   url.searchParams.set('response_type', 'code');
   if (clientId) {
     url.searchParams.set('client_id', clientId);
@@ -94,6 +107,7 @@ export async function exchangeAafMfaCode(
   }
 
   try {
+    const validatedTokenEndpoint = getValidatedHttpsEndpoint(tokenEndpoint, 'token endpoint');
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
@@ -102,8 +116,8 @@ export async function exchangeAafMfaCode(
     if (clientId) body.set('client_id', clientId);
     if (clientSecret) body.set('client_secret', clientSecret);
 
-    const response = await logOutboundRequest('POST', tokenEndpoint, () =>
-      fetch(tokenEndpoint, {
+    const response = await logOutboundRequest('POST', validatedTokenEndpoint, () =>
+      fetch(validatedTokenEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: body.toString(),
@@ -137,9 +151,12 @@ export async function getAafMfaUserInfo(accessToken: string): Promise<Record<str
   if (!userInfoEndpoint || !accessToken) return {};
 
   try {
-    const response = await logOutboundRequest('GET', userInfoEndpoint, () =>
-      fetch(userInfoEndpoint, {
-        headers: { Authorization: `Bearer ${accessToken}` },
+    const validatedUserInfoEndpoint = getValidatedHttpsEndpoint(userInfoEndpoint, 'userinfo endpoint');
+    const headers = new Headers();
+    headers.set('Authorization', ['Bearer', accessToken].join(' '));
+    const response = await logOutboundRequest('GET', validatedUserInfoEndpoint, () =>
+      fetch(validatedUserInfoEndpoint, {
+        headers,
       })
     );
 

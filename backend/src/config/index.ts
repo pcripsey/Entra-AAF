@@ -27,7 +27,10 @@ export const config = {
   baseUrl: process.env.BASE_URL || 'http://localhost:3001',
   adminUsername: process.env.ADMIN_USERNAME || 'admin',
   adminPassword: process.env.ADMIN_PASSWORD || 'admin',
-  cookieSecure: process.env.COOKIE_SECURE === 'true',
+  cookieSecure:
+    (process.env.NODE_ENV || 'development') === 'production'
+      ? process.env.COOKIE_SECURE !== 'false'
+      : process.env.COOKIE_SECURE === 'true',
   corsOrigins: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim()) : null,
   dbPath: process.env.DB_PATH || './data/bridge.db',
   jwtPrivateKeyPath: process.env.JWT_PRIVATE_KEY_PATH || './keys/private.pem',
@@ -63,3 +66,7 @@ export const config = {
       : [],
   },
 };
+
+if (config.nodeEnv === 'production' && config.cookieSecure !== true) {
+  throw new Error('In production, secure session cookies are required. Remove COOKIE_SECURE=false or set COOKIE_SECURE=true.');
+}
