@@ -12,10 +12,26 @@ function escapeRegExp(value: string): string {
 }
 
 function getLocationBlock(configText: string, locationHeader: string): string {
-  const blockPattern = new RegExp(`${escapeRegExp(locationHeader)}\\s*\\{([\\s\\S]*?)\\n\\s*\\}`, 'm');
-  const match = configText.match(blockPattern);
+  const headerPattern = new RegExp(`${escapeRegExp(locationHeader)}\\s*\\{`, 'm');
+  const match = headerPattern.exec(configText);
   assert.ok(match, `Expected nginx location block: ${locationHeader}`);
-  return match[1];
+
+  const blockStart = match.index + match[0].length;
+  let depth = 1;
+
+  for (let i = blockStart; i < configText.length; i += 1) {
+    if (configText[i] === '{') {
+      depth += 1;
+    } else if (configText[i] === '}') {
+      depth -= 1;
+
+      if (depth === 0) {
+        return configText.slice(blockStart, i);
+      }
+    }
+  }
+
+  assert.fail(`Expected nginx location block to close: ${locationHeader}`);
 }
 
 function assertProxyBlock(configText: string, locationHeader: string): void {
