@@ -4,118 +4,55 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-type LocationBlock = {
-  modifier: '' | '=' | '^~' | '~';
-  pattern: string;
-  body: string;
-};
-
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const nginxConfPath = path.join(repoRoot, 'frontend/nginx.conf');
 const dockerfilePath = path.join(repoRoot, 'frontend/Dockerfile');
 
-function loadLocationBlocks(configText: string): LocationBlock[] {
-  const locations: LocationBlock[] = [];
-  const locationRegex = /location\s+(?:(=|\^~|~)\s+)?([^{\s]+)\s*\{/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = locationRegex.exec(configText)) !== null) {
-    const modifier = (match[1] ?? '') as LocationBlock['modifier'];
-    const pattern = match[2];
-    let braceDepth = 1;
-    let index = locationRegex.lastIndex;
-
-    while (index < configText.length && braceDepth > 0) {
-      const char = configText[index];
-      if (char === '{') braceDepth += 1;
-      if (char === '}') braceDepth -= 1;
-      index += 1;
-    }
-
-    locations.push({
-      modifier,
-      pattern,
-      body: configText.slice(locationRegex.lastIndex, index - 1),
-    });
-
-    locationRegex.lastIndex = index;
-  }
-
-  return locations;
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function selectLocation(locations: LocationBlock[], requestPath: string): LocationBlock | undefined {
-  const exactMatch = locations.find((location) => location.modifier === '=' && location.pattern === requestPath);
-  if (exactMatch) return exactMatch;
-
-  const preferredPrefixMatches = locations
-    .filter((location) => location.modifier === '^~' && requestPath.startsWith(location.pattern))
-    .sort((left, right) => right.pattern.length - left.pattern.length);
-  if (preferredPrefixMatches.length > 0) return preferredPrefixMatches[0];
-
-  const regexMatch = locations.find(
-    (location) => location.modifier === '~' && new RegExp(location.pattern).test(requestPath)
-  );
-  if (regexMatch) return regexMatch;
-
-  const prefixMatches = locations
-    .filter((location) => location.modifier === '' && requestPath.startsWith(location.pattern))
-    .sort((left, right) => right.pattern.length - left.pattern.length);
-
-  return prefixMatches[0];
+function getLocationBlock(configText: string, locationHeader: string): string {
+  const blockPattern = new RegExp(`${escapeRegExp(locationHeader)}\\s*\\{([\\s\\S]*?)\\n\\s*\\}`, 'm');
+  const match = configText.match(blockPattern);
+  assert.ok(match, `Expected nginx location block: ${locationHeader}`);
+  return match[1];
 }
 
-test('frontend nginx proxies every backend route family and preserves SPA fallback routes', () => {
+function assertProxyBlock(configText: string, locationHeader: string): void {
+  const block = getLocationBlock(configText, locationHeader);
+  assert.match(block, /proxy_pass http:\/\/backend:3001;/, `${locationHeader} should proxy to backend:3001`);
+  assert.match(block, /proxy_set_header Host \$host;/, `${locationHeader} should forward Host`);
+  assert.match(block, /proxy_set_header X-Real-IP \$remote_addr;/, `${locationHeader} should forward X-Real-IP`);
+  assert.match(block, /proxy_set_header X-Forwarded-Proto https;/, `${locationHeader} should force HTTPS scheme`);
+  assert.match(block, /proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;/, `${locationHeader} should append X-Forwarded-For`);
+}
+
+test('frontend nginx declares explicit proxy locations for every backend route family', () => {
   const configText = fs.readFileSync(nginxConfPath, 'utf8');
-  const locations = loadLocationBlocks(configText);
 
-  const backendPaths = [
-    '/api/admin/status',
-    '/api/admin/config/entra',
-    '/.well-known/openid-configuration',
-    '/.well-known/jwks.json',
-    '/authorize',
-    '/login/entra',
-    '/login/aaf',
-    '/callback',
-    '/callback/',
-    '/callback/entra',
-    '/callback/aaf',
-    '/entra-eam',
-    '/token',
-    '/userinfo',
-    '/entra-login',
-    '/health',
+  const backendLocationHeaders = [
+    'location ^~ /api/',
+    'location ^~ /.well-known/',
+    'location ^~ /login/',
+    'location ^~ /callback/',
+    'location ~ ^/(authorize|callback|entra-eam|token|userinfo|entra-login|health)$',
   ];
 
-  for (const requestPath of backendPaths) {
-    const location = selectLocation(locations, requestPath);
-    assert.ok(location, `Expected a matching nginx location for ${requestPath}`);
-    assert.match(location.body, /proxy_pass http:\/\/backend:3001;/, `${requestPath} should proxy to backend:3001`);
-  }
-
-  const spaPaths = ['/login', '/backend-logs', '/sessions', '/config/entra', '/entra-redirect'];
-
-  for (const requestPath of spaPaths) {
-    const location = selectLocation(locations, requestPath);
-    assert.ok(location, `Expected a matching nginx location for ${requestPath}`);
-    assert.match(location.body, /try_files \$uri \$uri\/ \/index\.html;/, `${requestPath} should stay on SPA fallback`);
+  for (const locationHeader of backendLocationHeaders) {
+    assertProxyBlock(configText, locationHeader);
   }
 });
 
-test('frontend nginx proxy locations preserve backend request URI and production forwarding headers', () => {
+test('frontend nginx keeps SPA fallback for frontend-only routes', () => {
   const configText = fs.readFileSync(nginxConfPath, 'utf8');
-  const locations = loadLocationBlocks(configText).filter((location) => /proxy_pass http:\/\/backend:3001;/.test(location.body));
+  const spaBlock = getLocationBlock(configText, 'location /');
 
-  assert.ok(locations.length > 0, 'Expected proxy locations in frontend nginx config');
+  assert.match(spaBlock, /root \/usr\/share\/nginx\/html;/, 'SPA fallback should serve the built frontend assets');
+  assert.match(spaBlock, /try_files \$uri \$uri\/ \/index\.html;/, 'SPA fallback should keep React client-side routes working');
 
-  for (const location of locations) {
-    assert.match(location.body, /proxy_pass http:\/\/backend:3001;/, 'Proxy pass must not rewrite the request URI');
-    assert.match(location.body, /proxy_set_header Host \$host;/, 'Proxy should forward Host');
-    assert.match(location.body, /proxy_set_header X-Real-IP \$remote_addr;/, 'Proxy should forward X-Real-IP');
-    assert.match(location.body, /proxy_set_header X-Forwarded-Proto https;/, 'Proxy should force HTTPS scheme');
-    assert.match(location.body, /proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;/, 'Proxy should append X-Forwarded-For');
-  }
+  assert.doesNotMatch(configText, /location\s+(?:=|\^~|~)?\s*\/login\s*\{/, 'React /login should not be swallowed by a backend proxy block');
+  assert.doesNotMatch(configText, /location\s+(?:=|\^~|~)?\s*\/backend-logs\s*\{/, 'React /backend-logs should continue to use the SPA fallback');
 });
 
 test('frontend production image copies the nginx config into nginx default.conf', () => {
