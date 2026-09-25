@@ -210,6 +210,21 @@ test('verifyEntraEamRequestToken rejects a token missing required identity claim
   );
 });
 
+test('verifyEntraEamRequestToken rejects a token whose exp predates iat', async () => {
+  const { verifyEntraEamRequestToken } = await loadOidcClientService();
+  const { context, privateKey } = await createVerificationContext();
+  const issuedAt = Math.floor(Date.now() / 1000) - 30;
+  const token = await signToken(privateKey, {
+    iat: issuedAt,
+    exp: issuedAt - 1,
+  });
+
+  await assert.rejects(
+    () => verifyEntraEamRequestToken(token, { context }),
+    /exp claim predates iat/,
+  );
+});
+
 test('verifyEntraIdToken still rejects an ordinarily expired Entra ID token', async () => {
   const { verifyEntraIdToken } = await loadOidcClientService();
   const { context, privateKey } = await createVerificationContext();
