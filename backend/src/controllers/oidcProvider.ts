@@ -24,6 +24,20 @@ const ENTRA_EAM_VALID_AMR = new Set([
   'face', 'fido', 'fpt', 'hwk', 'iris', 'otp', 'tel', 'pop', 'retina', 'sc', 'sms', 'swk', 'vbm', 'bio',
 ]);
 
+function getPreferredEntraEamAmr(value: unknown): string | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  for (const candidate of value) {
+    if (typeof candidate === 'string' && ENTRA_EAM_VALID_AMR.has(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 /**
  * Synthesises the bridge's own AMR/ACR claims from session state and writes
  * them into the user-claims object.  Mutates `userClaims`.
@@ -31,21 +45,20 @@ const ENTRA_EAM_VALID_AMR = new Set([
  * Entra's internal amr (e.g. ["pwd", "mfa"]) is consumed internally for
  * step-up logic and must NOT be forwarded to AAF.
  */
-function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: BridgeSession): void {
+export function enrichClaimsWithStepUp(userClaims: Record<string, unknown>, session: BridgeSession): void {
   if (session.aaf_mfa_verified) {
     // If AAF's userinfo already supplied a valid RFC 8176 amr array, honour it.
     // Otherwise fall back to 'swk' (software-based authenticator) as a safe
     // default that satisfies Entra EAM's possessionorinherence requirement.
     const existingAmr = userClaims['amr'];
-    const validFromAaf =
-      Array.isArray(existingAmr) &&
-      existingAmr.length > 0 &&
-      (existingAmr as string[]).some(v => ENTRA_EAM_VALID_AMR.has(v));
+    const preferredEamAmr = getPreferredEntraEamAmr(existingAmr);
 
-    if (!validFromAaf) {
+    if (session.is_entra_initiated) {
+      userClaims['amr'] = [preferredEamAmr || 'swk'];
+    } else if (!preferredEamAmr) {
       userClaims['amr'] = ['swk'];
     }
-    // else keep the array AAF provided
+    // else keep the array AAF provided for non-EAM OIDC clients
   } else if (session.entra_verified) {
     userClaims['amr'] = ['pwd'];   // array required by OIDC spec and Entra
   } else {

@@ -21,8 +21,8 @@
  *  5. Bridge redirects to /login/aaf for AAF MFA (second factor).
  *  6. After AAF MFA succeeds, /callback/aaf detects is_entra_initiated and
  *     issues a signed id_token, then redirects to Entra's redirect_uri.
- *  7. Entra validates the id_token, sees amr=["mfa","aaf"], aal="MFA", and
- *     completes the authentication.
+ *  7. Entra validates the id_token, sees a supported RFC 8176 AMR plus the
+ *     requested/default ACR, and completes the authentication.
  *
  * Security:
  *  - The client_id parameter must match the configured Entra client ID.
@@ -39,7 +39,7 @@ import { config } from '../config';
 import { createBridgeSession, markBridgeSessionEntraInitiated } from '../services/sessionService';
 import { updateSessionTokens, markEntraVerified, setAafOriginalState } from '../models/session';
 import { getEntraConfig } from '../models/config';
-import { verifyEntraIdToken, decodeIdTokenHint } from '../services/oidcClientService';
+import { verifyEntraEamRequestToken, decodeIdTokenHint } from '../services/oidcClientService';
 import { isAafMfaConfigured } from '../services/aafMfaService';
 import { createAuditLog } from '../models/auditLog';
 import { logger } from '../utils/logger';
@@ -130,17 +130,15 @@ export async function entraEam(req: Request, res: Response, next: NextFunction):
     }
 
     // If Entra supplied a signed `request` JWT or `id_token_hint` (form_post),
-    // verify it before trusting any user claims it contains.  If verification
-    // fails, reject the request so an unauthenticated caller cannot fabricate
-    // an identity.  `request` JWT (GET flow) takes precedence over
-    // `id_token_hint` (form_post flow); both are cryptographically verified
-    // via the same `verifyEntraIdToken` call, so there is no privilege
-    // escalation risk if both are present simultaneously.
+    // verify it before trusting any user claims it contains.  EAM handoff
+    // tokens are allowed to arrive already expired, so this path validates
+    // signature/issuer/audience/identity and enforces a short iat-based replay
+    // window instead of ordinary exp handling.
     let jwtClaims: Record<string, unknown> | null = null;
     const jwtToVerify = requestJwt || id_token_hint;
     if (jwtToVerify) {
       try {
-        jwtClaims = await verifyEntraIdToken(jwtToVerify);
+        jwtClaims = await verifyEntraEamRequestToken(jwtToVerify);
         logger.debug('[EAM] Entra request JWT verified successfully');
       } catch (err) {
         createAuditLog('entra_eam_rejected', null, `Invalid request JWT: ${String(err)}`, req.ip || null);
@@ -170,7 +168,10 @@ export async function entraEam(req: Request, res: Response, next: NextFunction):
     // Create bridge session.  The redirect_uri here is Entra's callback URI —
     // after AAF MFA succeeds the bridge will redirect back to it.
     const bridgeState = uuidv4();
-    const bridgeNonce = nonce || uuidv4();
+    const jwtNonce = jwtClaims && typeof jwtClaims['nonce'] === 'string'
+      ? jwtClaims['nonce']
+      : null;
+    const bridgeNonce = nonce || jwtNonce || uuidv4();
 
     createBridgeSession(
       bridgeState,

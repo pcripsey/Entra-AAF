@@ -64,6 +64,9 @@ export const config = {
     allowedRedirectUris: process.env.ENTRA_EAM_ALLOWED_REDIRECT_URIS
       ? process.env.ENTRA_EAM_ALLOWED_REDIRECT_URIS.split(',').map((s) => s.trim())
       : [],
+    // Entra EAM request/id_token_hint JWTs may arrive already expired. Accept
+    // them only when they were issued recently enough to satisfy replay limits.
+    maxTokenAgeSeconds: parseIntegerEnv(process.env.ENTRA_EAM_MAX_TOKEN_AGE_SECONDS, 300, 1),
   },
 };
 

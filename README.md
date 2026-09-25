@@ -73,6 +73,7 @@ User → Entra ID (1FA: password / passkey)
 4. In the Entra App Registration for the bridge, add `{BASE_URL}/entra-eam` as a redirect URI.
 5. Create a **Conditional Access policy** that requires the external MFA for the target applications.
 6. Optionally set `ENTRA_EAM_ALLOWED_REDIRECT_URIS` if your tenant uses a non-standard Entra redirect domain. Entries must be exact `https://` URLs.
+7. If needed, tune `ENTRA_EAM_MAX_TOKEN_AGE_SECONDS` to control how long the bridge will accept a Microsoft-signed EAM `request` / `id_token_hint` based on its `iat` claim, even when `exp` is already in the past.
 
 ## Quick Start
 
@@ -126,6 +127,7 @@ Open http://localhost (frontend) and login with your configured admin credential
 | `AAF_MFA_CLIENT_ID` | **Step-up**: Bridge's client ID registered at AAF's auth server | - |
 | `AAF_MFA_CLIENT_SECRET` | **Step-up**: Bridge's client secret at AAF's auth server | - |
 | `ENTRA_EAM_ALLOWED_REDIRECT_URIS` | **EAM**: Extra allowed Entra redirect URIs (comma-separated exact `https://` URLs) | - |
+| `ENTRA_EAM_MAX_TOKEN_AGE_SECONDS` | **EAM**: Max age in seconds for Entra-signed `request` / `id_token_hint` replay protection | `300` |
 
 ### Entra ID App Registration
 
@@ -165,7 +167,7 @@ Configure AAF to use this bridge as an OIDC provider:
 When step-up is enabled, the final JWT contains:
 - Entra user claims (`sub`, `email`, `name`, `groups`, etc.)
 - `aal: "MFA"` — authentication assurance level
-- `amr: [..., "mfa", "aaf"]` — authentication methods including AAF MFA
+- `amr: [...]` — authentication methods. For Entra EAM responses this is normalised to a supported RFC 8176 method such as `sms` or `swk`.
 
 ## Admin UI
 
