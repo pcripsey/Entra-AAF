@@ -55,7 +55,8 @@ test('frontend nginx declares explicit proxy locations for every backend route f
   const backendLocationHeaders = [
     'location ^~ /api/',
     'location ^~ /.well-known/',
-    'location ~ ^/login/(entra|aaf)/?$',
+    'location = /login',
+    'location ~ ^/login/(entra|aaf)(?:/.*)?$',
     'location = /callback',
     'location = /callback/',
     'location ^~ /callback/',
