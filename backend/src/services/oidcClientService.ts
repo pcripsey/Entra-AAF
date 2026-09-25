@@ -267,7 +267,11 @@ export async function verifyEntraEamRequestToken(
   }
 
   const exp = parseNumericDateClaim(payload, 'exp');
-  if (exp !== null && exp >= nowSeconds - 60) {
+  if (exp === null) {
+    throw new Error('JWT missing required exp claim');
+  }
+
+  if (exp >= nowSeconds - 60) {
     logger.debug('Entra EAM handoff token verified successfully (not expired)');
   } else {
     logger.debug('Entra EAM handoff token verified successfully (expired-but-fresh)');

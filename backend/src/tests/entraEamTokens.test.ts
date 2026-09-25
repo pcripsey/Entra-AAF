@@ -169,6 +169,36 @@ test('verifyEntraEamRequestToken rejects a stale Entra EAM token beyond the repl
   );
 });
 
+test('verifyEntraEamRequestToken rejects a token whose iat is too far in the future', async () => {
+  const { verifyEntraEamRequestToken } = await loadOidcClientService();
+  const { context, privateKey } = await createVerificationContext();
+  const futureIssuedAt = Math.floor(Date.now() / 1000) + 120;
+  const token = await signToken(privateKey, {
+    iat: futureIssuedAt,
+    exp: futureIssuedAt + 120,
+  });
+
+  await assert.rejects(
+    () => verifyEntraEamRequestToken(token, { context }),
+    /iat claim is in the future/,
+  );
+});
+
+test('verifyEntraEamRequestToken rejects a token whose nbf is in the future', async () => {
+  const { verifyEntraEamRequestToken } = await loadOidcClientService();
+  const { context, privateKey } = await createVerificationContext();
+  const futureNotBefore = Math.floor(Date.now() / 1000) + 120;
+  const token = await signToken(privateKey, {
+    nbf: futureNotBefore,
+    exp: futureNotBefore + 120,
+  });
+
+  await assert.rejects(
+    () => verifyEntraEamRequestToken(token, { context }),
+    /nbf claim is in the future/,
+  );
+});
+
 test('verifyEntraEamRequestToken rejects a token missing required identity claims', async () => {
   const { verifyEntraEamRequestToken } = await loadOidcClientService();
   const { context, privateKey } = await createVerificationContext();
