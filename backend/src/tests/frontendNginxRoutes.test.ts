@@ -78,6 +78,7 @@ test('frontend nginx proxies every backend route family and preserves SPA fallba
     '/login/entra',
     '/login/aaf',
     '/callback',
+    '/callback/',
     '/callback/entra',
     '/callback/aaf',
     '/entra-eam',
