@@ -72,7 +72,7 @@ User → Entra ID (1FA: password / passkey)
 3. Set the **Client ID** to the bridge's Entra App Registration `ENTRA_CLIENT_ID`.
 4. In the Entra App Registration for the bridge, add `{BASE_URL}/entra-eam` as a redirect URI.
 5. Create a **Conditional Access policy** that requires the external MFA for the target applications.
-6. Optionally set `ENTRA_EAM_ALLOWED_REDIRECT_URIS` if your tenant uses a non-standard Entra redirect domain.
+6. Optionally set `ENTRA_EAM_ALLOWED_REDIRECT_URIS` if your tenant uses a non-standard Entra redirect domain. Entries must be exact `https://` URLs.
 
 ## Quick Start
 
@@ -109,6 +109,7 @@ Open http://localhost (frontend) and login with your configured admin credential
 | `RATE_LIMIT_WINDOW_MS` | OIDC rate-limit window in milliseconds | `60000` |
 | `RATE_LIMIT_MAX` | OIDC rate-limit max requests per IP per window | `200` |
 | `SESSION_SECRET` | Session encryption secret | required |
+| `COOKIE_SECURE` | Use secure cookies (`NODE_ENV=production` rejects `false`) | `true` |
 | `ADMIN_USERNAME` | Admin UI username | `admin` |
 | `ADMIN_PASSWORD` | Admin UI password | required |
 | `ENTRA_TENANT_ID` | Azure AD Tenant ID | - |
@@ -119,12 +120,12 @@ Open http://localhost (frontend) and login with your configured admin credential
 | `AAF_CLIENT_ID` | AAF's OIDC client ID for calling this bridge | - |
 | `AAF_CLIENT_SECRET` | AAF's OIDC client secret | - |
 | `AAF_REDIRECT_URIS` | Comma-separated list of AAF redirect URIs | - |
-| `AAF_AUTHORIZE_ENDPOINT` | **Step-up**: AAF authorization endpoint URL (enables step-up) | - |
-| `AAF_TOKEN_ENDPOINT` | **Step-up**: AAF token endpoint for MFA code exchange | - |
-| `AAF_USERINFO_ENDPOINT` | **Step-up**: AAF UserInfo endpoint | - |
+| `AAF_AUTHORIZE_ENDPOINT` | **Step-up**: AAF authorization endpoint URL (must be `https://`; enables step-up) | - |
+| `AAF_TOKEN_ENDPOINT` | **Step-up**: AAF token endpoint for MFA code exchange (must be `https://`) | - |
+| `AAF_USERINFO_ENDPOINT` | **Step-up**: AAF UserInfo endpoint (must be `https://`) | - |
 | `AAF_MFA_CLIENT_ID` | **Step-up**: Bridge's client ID registered at AAF's auth server | - |
 | `AAF_MFA_CLIENT_SECRET` | **Step-up**: Bridge's client secret at AAF's auth server | - |
-| `ENTRA_EAM_ALLOWED_REDIRECT_URIS` | **EAM**: Extra allowed Entra redirect URIs (comma-separated) | - |
+| `ENTRA_EAM_ALLOWED_REDIRECT_URIS` | **EAM**: Extra allowed Entra redirect URIs (comma-separated exact `https://` URLs) | - |
 
 ### Entra ID App Registration
 
@@ -212,3 +213,5 @@ npm start
 - State tokens are correlated by UUID — single-use authorization codes expire after 5 minutes
 - Admin console uses local session authentication, completely isolated from Entra/AAF flows
 - EAM endpoint validates `client_id` and `redirect_uri`; optionally validates an Entra-signed `request` JWT for cryptographic proof of origin
+- EAM `redirect_uri` requires HTTPS and only allows Microsoft login domains or exact trusted HTTPS allowlist entries
+- AAF MFA authorize/token/userinfo endpoints must use HTTPS

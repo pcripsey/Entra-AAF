@@ -14,6 +14,15 @@ const startTime = Date.now();
 
 type AdminSession = { authenticated?: boolean; username?: string };
 
+function isHttpsUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export function login(req: Request, res: Response): void {
   const { username, password } = req.body as { username: string; password: string };
 
@@ -221,6 +230,20 @@ export function updateAafMfaConfigController(req: Request, res: Response): void 
     clientId: string;
     clientSecret: string;
   };
+
+  if (authorizeEndpoint && !isHttpsUrl(authorizeEndpoint)) {
+    res.status(400).json({ error: 'authorizeEndpoint must be a valid https URL.' });
+    return;
+  }
+  if (tokenEndpoint && !isHttpsUrl(tokenEndpoint)) {
+    res.status(400).json({ error: 'tokenEndpoint must be a valid https URL.' });
+    return;
+  }
+  if (userInfoEndpoint && !isHttpsUrl(userInfoEndpoint)) {
+    res.status(400).json({ error: 'userInfoEndpoint must be a valid https URL.' });
+    return;
+  }
+
   setAafMfaConfig(authorizeEndpoint, tokenEndpoint, userInfoEndpoint, clientId, clientSecret);
   const sess = (req.session as unknown) as AdminSession;
   createAuditLog('aaf_mfa_config_updated', sess.username || 'admin', null, req.ip || null);

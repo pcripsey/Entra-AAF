@@ -621,6 +621,18 @@ export async function callbackAaf(req: Request, res: Response, next: NextFunctio
     const sess = (req.session as unknown) as SessionWithState;
     const originalState = sess.aafState || bridgeSession.aaf_original_state || bridgeState;
     const redirectUri = bridgeSession.aaf_redirect_uri || config.aaf.redirectUris[0];
+    try {
+      const parsedRedirectUri = new URL(redirectUri);
+      if (parsedRedirectUri.protocol !== 'https:') {
+        createAuditLog('aaf_mfa_failed', userIdentifier, `Non-HTTPS redirect URI blocked for bridgeState: ${bridgeState}`, req.ip || null);
+        res.status(400).json({ error: 'invalid_request', error_description: 'redirect_uri must use https' });
+        return;
+      }
+    } catch {
+      createAuditLog('aaf_mfa_failed', userIdentifier, `Invalid redirect URI for bridgeState: ${bridgeState}`, req.ip || null);
+      res.status(400).json({ error: 'invalid_request', error_description: 'redirect_uri is invalid' });
+      return;
+    }
 
     const amrString = finalAmrClaims && finalAmrClaims.length > 0 ? finalAmrClaims.join(',') : 'unknown';
     createAuditLog('aaf_mfa_success', userIdentifier, `bridgeState: ${bridgeState}; amr: ${amrString}`, req.ip || null);

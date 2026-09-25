@@ -28,6 +28,7 @@
  *  - The client_id parameter must match the configured Entra client ID.
  *  - The redirect_uri must either be in ENTRA_EAM_ALLOWED_REDIRECT_URIS or
  *    originate from login.microsoftonline.com / login.microsoft.com.
+ *  - All redirect URIs must use HTTPS.
  *  - When Entra supplies a `request` JWT it is cryptographically verified
  *    against Entra's JWKS before any session is created.
  */
@@ -46,13 +47,32 @@ import { logger } from '../utils/logger';
 /**
  * Validates that the supplied redirect_uri is trustworthy for the EAM flow.
  * It must either be in the explicit allow-list (ENTRA_EAM_ALLOWED_REDIRECT_URIS)
- * or originate from an official Microsoft login domain.
+ * or originate from an official Microsoft login domain, and must use HTTPS.
  */
 function isAllowedEamRedirectUri(uri: string): boolean {
   const explicit = config.entraEam.allowedRedirectUris;
-  if (explicit.length > 0 && explicit.includes(uri)) return true;
   try {
-    const { hostname } = new URL(uri);
+    const parsedUri = new URL(uri);
+    if (parsedUri.protocol !== 'https:') {
+      return false;
+    }
+
+    if (explicit.length > 0) {
+      const normalizedCandidate = parsedUri.toString();
+      const hasExplicitMatch = explicit.some((allowedUri) => {
+        try {
+          const parsedAllowedUri = new URL(allowedUri);
+          return parsedAllowedUri.protocol === 'https:' && parsedAllowedUri.toString() === normalizedCandidate;
+        } catch {
+          return false;
+        }
+      });
+      if (hasExplicitMatch) {
+        return true;
+      }
+    }
+
+    const { hostname } = parsedUri;
     return (
       hostname === 'login.microsoftonline.com' ||
       hostname === 'login.microsoft.com' ||
