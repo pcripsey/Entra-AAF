@@ -55,6 +55,7 @@ test('frontend nginx declares explicit proxy locations for every backend route f
     'location ^~ /.well-known/',
     'location = /login',
     'location ~ ^/login/(entra|aaf)/?$',
+    'location = /callback',
     'location ^~ /callback/',
     'location ^~ /entra-login/',
     'location ~ ^/(authorize|callback|entra-eam|token|userinfo|entra-login|health)(?:/.*)?$',
