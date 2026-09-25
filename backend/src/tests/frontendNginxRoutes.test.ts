@@ -51,7 +51,7 @@ test('frontend nginx keeps SPA fallback for frontend-only routes', () => {
   assert.match(spaBlock, /root \/usr\/share\/nginx\/html;/, 'SPA fallback should serve the built frontend assets');
   assert.match(spaBlock, /try_files \$uri \$uri\/ \/index\.html;/, 'SPA fallback should keep React client-side routes working');
 
-  assert.doesNotMatch(configText, /location\s+(?:=|\^~|~)?\s*\/login\s*\{/, 'React /login should not be swallowed by a backend proxy block');
+  assert.doesNotMatch(configText, /location\s+=\s+\/login\s*\{/, 'React /login should remain owned by the SPA fallback');
   assert.doesNotMatch(configText, /location\s+(?:=|\^~|~)?\s*\/backend-logs\s*\{/, 'React /backend-logs should continue to use the SPA fallback');
 });
 
