@@ -53,6 +53,7 @@ test('frontend nginx declares explicit proxy locations for every backend route f
   const backendLocationHeaders = [
     'location ^~ /api/',
     'location ^~ /.well-known/',
+    'location = /login',
     'location ~ ^/login/(entra|aaf)/?$',
     'location ^~ /callback/',
     'location ^~ /entra-login/',
@@ -76,11 +77,7 @@ test('frontend nginx keeps SPA fallback for frontend-only routes', () => {
 
 test('frontend nginx keeps descendant backend routes on regex-matched OIDC endpoints', () => {
   const configText = fs.readFileSync(nginxConfPath, 'utf8');
-  assert.match(
-    configText,
-    /location ~ \^\/\(authorize\|callback\|entra-eam\|token\|userinfo\|entra-login\|health\)\(\?:\/\.\*\)\?\$/,
-    'Regex-matched OIDC endpoints should include descendant path coverage',
-  );
+  assertProxyBlock(configText, 'location ~ ^/(authorize|callback|entra-eam|token|userinfo|entra-login|health)(?:/.*)?$');
 });
 
 test('frontend production image copies the nginx config into nginx default.conf', () => {
