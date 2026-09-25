@@ -275,10 +275,6 @@ export async function verifyEntraEamRequestToken(
     throw new Error('JWT exp claim predates iat');
   }
 
-  if (nowSeconds - exp > maxTokenAgeSeconds + 60) {
-    throw new Error(`JWT expiration is older than the allowed EAM grace window of ${maxTokenAgeSeconds} seconds`);
-  }
-
   if (exp >= nowSeconds) {
     logger.debug('Entra EAM handoff token verified successfully (not expired)');
   } else {
