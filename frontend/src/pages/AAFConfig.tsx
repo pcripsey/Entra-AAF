@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAafConfig, updateAafConfig } from '../services/api';
+import { getAafConfig, getApiErrorMessage, updateAafConfig } from '../services/api';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import Alert from '../components/common/Alert';
@@ -32,8 +32,8 @@ export default function AAFConfig() {
     try {
       await updateAafConfig({ clientId, clientSecret, redirectUris: redirectUris.split('\n').map((u) => u.trim()).filter(Boolean) });
       setMsg('AAF configuration saved successfully.');
-    } catch {
-      setErr('Failed to save configuration. Please try again.');
+    } catch (err) {
+      setErr(getApiErrorMessage(err, 'Failed to save configuration. Please try again.'));
     } finally {
       setLoading(false);
     }

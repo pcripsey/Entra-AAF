@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login } from '../services/api';
+import { getApiErrorMessage, login } from '../services/api';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import Alert from '../components/common/Alert';
@@ -23,8 +23,8 @@ export default function Login() {
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('username', (res.data as { username: string }).username);
       navigate('/');
-    } catch {
-      setError('Invalid username or password. Please try again.');
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Invalid username or password. Please try again.'));
     } finally {
       setLoading(false);
     }

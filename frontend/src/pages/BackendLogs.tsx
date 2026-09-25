@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getBackendLogs, getLogLevel, setLogLevel } from '../services/api';
+import { getApiErrorMessage, getBackendLogs, getLogLevel, setLogLevel } from '../services/api';
 import { BackendLogEntry } from '../types';
+import Alert from '../components/common/Alert';
 import Card from '../components/common/Card';
 import Badge from '../components/common/Badge';
 import { BadgeVariant } from '../components/common/Badge';
@@ -89,6 +90,7 @@ export default function BackendLogs() {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [debugEnabled, setDebugEnabled] = useState(false);
+  const [err, setErr] = useState('');
   const limit = 100;
 
   const load = useCallback(async (p: number, type: LogType, d: string, s: string) => {
@@ -141,11 +143,12 @@ export default function BackendLogs() {
   const handleDebugToggle = async () => {
     const newLevel = debugEnabled ? 'info' : 'debug';
     try {
+      setErr('');
       await setLogLevel(newLevel);
       setDebugEnabled(!debugEnabled);
       setPage(1);
-    } catch {
-      // If the API call fails, keep the current state
+    } catch (error) {
+      setErr(getApiErrorMessage(error, 'Failed to change the backend log level. Please try again.'));
     }
   };
 
@@ -160,6 +163,7 @@ export default function BackendLogs() {
 
       <Card>
         <Card.Header>
+          {err && <Alert variant="error" onClose={() => setErr('')}>{err}</Alert>}
           <div className={styles.filterBar}>
             <div className={styles.filterGroup} role="group" aria-label="Log type">
               <span className={styles.filterLabel}>Type:</span>

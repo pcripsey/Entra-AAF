@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth';
+import { getAdminCsrfToken, requireAdminCsrfProtection } from '../middleware/adminCsrf';
 import {
   login,
   logout,
@@ -31,6 +32,9 @@ const backendLogsLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+router.get('/csrf-token', getAdminCsrfToken);
+router.use(requireAdminCsrfProtection);
 
 router.post('/login', login);
 router.post('/logout', logout);

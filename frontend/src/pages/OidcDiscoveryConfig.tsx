@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getOidcDiscoveryConfig, updateOidcDiscoveryConfig } from '../services/api';
+import { getApiErrorMessage, getOidcDiscoveryConfig, updateOidcDiscoveryConfig } from '../services/api';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import Alert from '../components/common/Alert';
@@ -46,8 +46,8 @@ export default function OidcDiscoveryConfig() {
     try {
       await updateOidcDiscoveryConfig({ scopesSupported, claimsSupported });
       setMsg('OIDC discovery configuration saved successfully.');
-    } catch {
-      setErr('Failed to save configuration. Please try again.');
+    } catch (err) {
+      setErr(getApiErrorMessage(err, 'Failed to save configuration. Please try again.'));
     } finally {
       setLoading(false);
     }

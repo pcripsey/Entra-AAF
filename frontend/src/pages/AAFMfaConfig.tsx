@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getAafMfaConfig, updateAafMfaConfig } from '../services/api';
+import { getAafMfaConfig, getApiErrorMessage, updateAafMfaConfig } from '../services/api';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import Alert from '../components/common/Alert';
@@ -44,8 +44,8 @@ export default function AAFMfaConfig() {
     try {
       await updateAafMfaConfig({ authorizeEndpoint, tokenEndpoint, userInfoEndpoint, clientId, clientSecret });
       setMsg('AAF MFA configuration saved. Step-up authentication will use these settings.');
-    } catch {
-      setErr('Failed to save configuration. Please try again.');
+    } catch (err) {
+      setErr(getApiErrorMessage(err, 'Failed to save configuration. Please try again.'));
     } finally {
       setLoading(false);
     }
