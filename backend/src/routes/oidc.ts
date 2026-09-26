@@ -20,6 +20,11 @@ const router = Router();
 router.get('/.well-known/openid-configuration', discovery);
 router.get('/.well-known/jwks.json', jwks);
 
+// Default login redirect to frontend
+router.get('/login', (_req, res) => {
+  res.redirect('/');
+});
+
 // AAF-as-initiator step-up flow
 // 1. AAF → /authorize → bridge validates, creates session, redirects to /login/entra
 router.get('/authorize', authorize);
